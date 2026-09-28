@@ -8,52 +8,79 @@
 		designerPage (optional): view id or outcome of the page including designer-snippet.xhtml.
 	-->
 	<h:outputStylesheet library="report-builder" name="rb.css" />
+	<div class="rb-root">
 	<h:form id="rbViewerForm">
 		<f:event type="preRenderView" listener="#{rbViewer.touch}" />
 		<p:messages id="rbMessages" closable="true" styleClass="rb-messages" />
+		<p:defaultCommand target="rbRun" />
 		<h:panelGroup rendered="#{rbViewer.canRun}">
-			<div class="rb-card">
-				<div class="rb-row">
-					<h:outputLabel for="rbReport" value="#{rbbundle['rb.report']}" />
-					<p:selectOneMenu id="rbReport" value="#{rbViewer.selectedId}" filter="true" filterMatchMode="contains" styleClass="rb-field">
-						<f:selectItem itemLabel="#{rbbundle['rb.chooseReport']}" itemValue="#{null}" noSelectionOption="true" />
-						<f:selectItems value="#{rbViewer.reportItems}" />
-						<p:ajax listener="#{rbViewer.onSelect}" process="@this" update="@form" />
-					</p:selectOneMenu>
-					<h:link outcome="#{designerPage}" value="#{rbbundle['rb.newReport']}" rendered="#{not empty designerPage and rbViewer.canDesign}"
-						styleClass="btn btn-default" />
+			<div class="rb-panel">
+				<div class="rb-panel-head">
+					<span class="rb-head-icon"><i class="fa fa-list-alt" /></span>
+					<div class="rb-titles">
+						<div class="rb-panel-title">#{rbbundle['rb.report']}</div>
+						<div class="rb-panel-hint">#{rbbundle['rb.hint.viewer']}</div>
+					</div>
+					<div class="rb-end">
+						<h:link outcome="#{designerPage}" value="#{rbbundle['rb.newReport']}" rendered="#{not empty designerPage and rbViewer.canDesign}"
+							styleClass="rb-btn" />
+					</div>
 				</div>
-				<h:panelGroup layout="block" styleClass="rb-hint" rendered="#{not empty rbViewer.selectedDescription}">
-					#{rbViewer.selectedDescription}
+				<div class="rb-fields">
+					<div class="rb-fieldset">
+						<p:selectOneMenu id="rbReport" value="#{rbViewer.selectedId}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-xl">
+							<f:selectItem itemLabel="#{rbbundle['rb.chooseReport']}" itemValue="#{null}" noSelectionOption="true" />
+							<f:selectItems value="#{rbViewer.reportItems}" />
+							<p:ajax listener="#{rbViewer.onSelect}" process="@this" update="@form" />
+						</p:selectOneMenu>
+					</div>
+				</div>
+				<h:panelGroup layout="block" styleClass="rb-note" rendered="#{not empty rbViewer.selectedDescription}">
+					<i class="fa fa-info-circle" /><span>#{rbViewer.selectedDescription}</span>
 				</h:panelGroup>
 			</div>
 
-			<h:panelGroup layout="block" styleClass="rb-card" rendered="#{rbViewer.selectedId ne null}">
-				<h:panelGroup rendered="#{not empty rbViewer.parameters}">
-					<h5>#{rbbundle['rb.parameters']}</h5>
-					<ui:repeat value="#{rbViewer.parameters}" var="rule">
-						<div class="rb-row">
-							<h:outputLabel value="#{rbViewer.parameterLabel(rule)}" />
-							<ui:include src="/report-builder/rule-value.xhtml">
-								<ui:param name="rule" value="#{rule}" />
-								<ui:param name="rbBean" value="#{rbViewer}" />
-							</ui:include>
-						</div>
-					</ui:repeat>
-				</h:panelGroup>
-				<div class="rb-actions">
-					<p:commandButton value="#{rbbundle['rb.run']}" icon="fa fa-play" action="#{rbViewer.run}" process="@form" update="@form" styleClass="btn btn-success" />
-					<p:commandButton value="#{rbbundle['rb.exportExcel']}" icon="fa fa-file-excel-o" action="#{rbViewer.exportExcel}" ajax="false" styleClass="btn btn-default" />
-					<h:link outcome="#{designerPage}" value="#{rbViewer.selectedEditable ? rbbundle['rb.edit'] : rbbundle['rb.copyDesign']}"
-						rendered="#{not empty designerPage and rbViewer.canDesign}" styleClass="btn btn-default">
-						<f:param name="id" value="#{rbViewer.selectedId}" />
-					</h:link>
+			<h:panelGroup layout="block" styleClass="rb-empty" rendered="#{rbViewer.selectedId eq null}">
+				<i class="fa fa-list-alt" />
+				<div class="rb-empty-title">#{empty rbViewer.reportItems ? rbbundle['rb.noReports'] : rbbundle['rb.viewer.emptyTitle']}</div>
+				<div>#{empty rbViewer.reportItems ? rbbundle['rb.noReportsText'] : rbbundle['rb.viewer.emptyText']}</div>
+			</h:panelGroup>
+
+			<h:panelGroup layout="block" styleClass="rb-panel" rendered="#{rbViewer.selectedId ne null and not empty rbViewer.parameters}">
+				<div class="rb-panel-head">
+					<span class="rb-head-icon"><i class="fa fa-filter" /></span>
+					<div class="rb-titles">
+						<div class="rb-panel-title">#{rbbundle['rb.parameters']}</div>
+						<div class="rb-panel-hint">#{rbbundle['rb.hint.parameters']}</div>
+					</div>
 				</div>
+				<ui:repeat value="#{rbViewer.parameters}" var="rule">
+					<div class="rb-row">
+						<span class="rb-label rb-w-lg">#{rbViewer.parameterLabel(rule)}</span>
+						<ui:include src="/report-builder/rule-value.xhtml">
+							<ui:param name="rule" value="#{rule}" />
+							<ui:param name="rbBean" value="#{rbViewer}" />
+						</ui:include>
+					</div>
+				</ui:repeat>
+			</h:panelGroup>
+
+			<h:panelGroup layout="block" styleClass="rb-actionbar" rendered="#{rbViewer.selectedId ne null}">
+				<p:commandButton id="rbRun" value="#{rbbundle['rb.run']}" icon="fa fa-play" action="#{rbViewer.run}" process="@form" update="@form"
+					styleClass="btn btn-info" />
+				<span class="rb-spacer" />
+				<p:commandButton value="#{rbbundle['rb.exportExcel']}" icon="fa fa-download" action="#{rbViewer.exportExcel}" ajax="false" styleClass="rb-btn" />
+				<h:link outcome="#{designerPage}" value="#{rbViewer.selectedEditable ? rbbundle['rb.edit'] : rbbundle['rb.copyDesign']}"
+					rendered="#{not empty designerPage and rbViewer.canDesign}" styleClass="rb-btn">
+					<f:param name="id" value="#{rbViewer.selectedId}" />
+				</h:link>
 			</h:panelGroup>
 
 			<ui:include src="/report-builder/result-table.xhtml">
 				<ui:param name="rbBean" value="#{rbViewer}" />
+				<ui:param name="rbTitle" value="#{rbViewer.selectedName}" />
 			</ui:include>
 		</h:panelGroup>
 	</h:form>
+	</div>
 </ui:composition>

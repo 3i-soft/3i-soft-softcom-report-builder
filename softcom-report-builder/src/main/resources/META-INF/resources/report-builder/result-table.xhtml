@@ -1,22 +1,30 @@
 <ui:composition xmlns="http://www.w3.org/1999/xhtml" xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
 	xmlns:h="http://xmlns.jcp.org/jsf/html" xmlns:f="http://xmlns.jcp.org/jsf/core" xmlns:p="http://primefaces.org/ui">
-	<!-- Paged result. Param: rbBean (designer or viewer bean). Paging redraws only this block, never unsent edits. -->
+	<!-- Paged result. Params: rbBean (designer or viewer bean), rbTitle (optional heading).
+	     Paging redraws only this block, never unsent edits. -->
 	<h:panelGroup id="rbResult" layout="block" styleClass="rb-result">
-		<h:panelGroup layout="block" styleClass="rb-card" rendered="#{rbBean.result ne null}">
-			<div class="rb-toolbar">
-				<p:commandButton value="#{rbbundle['rb.previous']}" action="#{rbBean.previous}" disabled="#{not rbBean.hasPrevious}"
-					process="@this" update="@(.rb-result) @(.rb-messages)" styleClass="btn btn-default" />
-				<p:commandButton value="#{rbbundle['rb.next']}" action="#{rbBean.next}" disabled="#{not rbBean.result.hasMore}"
-					process="@this" update="@(.rb-result) @(.rb-messages)" styleClass="btn btn-default" />
-				<h:outputLabel value="#{rbbundle['rb.pageSize']}" />
-				<p:selectOneMenu value="#{rbBean.pageSize}">
-					<f:selectItems value="#{rbBean.pageSizeItems}" />
-					<p:ajax listener="#{rbBean.onPageSizeChange}" process="@this" update="@(.rb-result) @(.rb-messages)" />
-				</p:selectOneMenu>
-				<h:outputText value="#{rbBean.pageInfo}" styleClass="rb-page-info" />
+		<h:panelGroup layout="block" styleClass="rb-panel" rendered="#{rbBean.result ne null}">
+			<div class="rb-panel-head">
+				<span class="rb-head-icon"><i class="fa fa-table" /></span>
+				<div class="rb-titles">
+					<div class="rb-panel-title">#{empty rbTitle ? rbbundle['rb.results'] : rbTitle}</div>
+					<h:panelGroup styleClass="rb-panel-hint" rendered="#{not empty rbBean.pageInfo}">
+						<span class="rb-chip">#{rbBean.pageInfo}</span>
+					</h:panelGroup>
+				</div>
+				<div class="rb-end rb-pager">
+					<h:outputLabel value="#{rbbundle['rb.pageSize']}" styleClass="rb-label" />
+					<p:selectOneMenu value="#{rbBean.pageSize}" autoWidth="false" styleClass="rb-w-xs">
+						<f:selectItems value="#{rbBean.pageSizeItems}" />
+						<p:ajax listener="#{rbBean.onPageSizeChange}" process="@this" update="@(.rb-result) @(.rb-messages)" />
+					</p:selectOneMenu>
+					<p:commandButton value="#{rbbundle['rb.previous']}" action="#{rbBean.previous}" disabled="#{not rbBean.hasPrevious}"
+						process="@this" update="@(.rb-result) @(.rb-messages)" styleClass="rb-btn" />
+					<p:commandButton value="#{rbbundle['rb.next']}" action="#{rbBean.next}" disabled="#{not rbBean.result.hasMore}"
+						process="@this" update="@(.rb-result) @(.rb-messages)" styleClass="rb-btn" />
+				</div>
 			</div>
-			<p:dataTable value="#{rbBean.result.rows}" var="row" styleClass="rb-table table table-striped table-hover"
-				emptyMessage="#{rbbundle['rb.noRows']}">
+			<p:dataTable value="#{rbBean.result.rows}" var="row" styleClass="rb-table" emptyMessage="#{rbbundle['rb.noRows']}">
 				<p:columns value="#{rbBean.result.columns}" var="col" styleClass="#{rbBean.columnStyle(col)}">
 					<f:facet name="header">#{rbBean.columnLabel(col)}</f:facet>
 					<h:outputText value="#{rbBean.format(row, col)}" />

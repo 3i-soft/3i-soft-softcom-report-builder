@@ -145,8 +145,8 @@ public class ReportField implements Serializable {
 	public String choiceLabel(String storedValue) {
 		if (storedValue == null || !hasChoices())
 			return storedValue;
-		String label = getChoices().get(storedValue);
-		return label == null ? storedValue : label;
+		String label = !enumValues.isEmpty() ? enumValues.get(storedValue) : choiceSource.label(storedValue);
+		return label == null || label.isEmpty() ? storedValue : label;
 	}
 
 	public String getLabel(Locale locale) {

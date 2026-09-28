@@ -1,17 +1,279 @@
-/* softcom-report-builder: minimal layout, inherits the host application's Bootstrap/PrimeFaces theme. */
-.rb-card { margin-bottom: 1rem; padding: 1rem; border: 1px solid #e3e6ea; border-radius: 4px; background: #fff; }
-.rb-card h5 { margin: 0 0 .75rem 0; font-weight: 600; }
-.rb-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-.rb-row > label { margin: 0; min-width: 7rem; }
-.rb-idx { min-width: 1.5rem; color: #6c757d; }
-.rb-field { min-width: 16rem; }
-.rb-input { min-width: 12rem; }
-.rb-group { border: 1px dashed #c9ced4; border-radius: 4px; padding: .75rem; margin-bottom: .75rem; }
-.rb-group-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-.rb-between { color: #6c757d; font-size: .9em; }
-.rb-note { color: #856404; background: #fff3cd; border-radius: 4px; padding: .4rem .6rem; margin-bottom: .75rem; }
-.rb-hint { color: #6c757d; font-size: .85em; }
-.rb-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
-.rb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .5rem 0; }
-.rb-page-info { color: #6c757d; }
-.rb-table td.rb-num, .rb-table th.rb-num { text-align: end; direction: ltr; }
+/*
+ * softcom-report-builder - neutral look that sits inside any HIS (Robust / Bootstrap 4) template.
+ * Only greys are used here; the main buttons keep the host's own btn-info / btn-success colours.
+ * A host can retune everything by overriding the variables, e.g.  .rb-root { --rb-accent: #1e6091; }
+ */
+.rb-root {
+	--rb-text: #1f2937;
+	--rb-muted: #6b7280;
+	--rb-border: #e5e7eb;
+	--rb-border-strong: #d1d5db;
+	--rb-soft: #f9fafb;
+	--rb-soft-2: #f3f4f6;
+	--rb-accent: #475569;
+	--rb-danger: #b42318;
+	--rb-radius: 10px;
+	color: var(--rb-text);
+}
+
+/* use the host font everywhere (the PrimeFaces theme would otherwise fall back to a serif Arabic font) */
+.rb-root .ui-widget,
+.rb-root .ui-widget input,
+.rb-root .ui-widget select,
+.rb-root .ui-widget textarea,
+.rb-root .ui-widget button,
+.rb-root .ui-widget table { font-family: inherit; font-size: inherit; }
+
+/* neutralise host page rules that target bare elements (e.g. "label { margin-top: 10px }") */
+.rb-root label { margin-top: 0; margin-bottom: 0; }
+.rb-root .ui-chkbox-label { font-size: .9rem; margin: 0 6px; }
+
+/* ------------------------------------------------------------------ panels */
+.rb-root .rb-panel {
+	background: #fff;
+	border: 1px solid var(--rb-border);
+	border-radius: var(--rb-radius);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+	padding: 16px 18px;
+	margin-bottom: 16px;
+}
+.rb-root .rb-panel-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-bottom: 12px;
+	margin-bottom: 14px;
+	border-bottom: 1px solid var(--rb-soft-2);
+}
+.rb-root .rb-panel-head .rb-titles { display: flex; flex-direction: column; }
+.rb-root .rb-panel-title { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--rb-text); line-height: 1.4; }
+.rb-root .rb-panel-hint { margin: 2px 0 0; font-size: .85rem; color: var(--rb-muted); font-weight: normal; }
+.rb-root .rb-panel-head .rb-end { margin-inline-start: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rb-root .rb-step {
+	flex: 0 0 auto;
+	width: 28px; height: 28px; line-height: 28px;
+	border-radius: 50%;
+	text-align: center;
+	background: var(--rb-accent);
+	color: #fff;
+	font-weight: 700; font-size: .9rem;
+}
+.rb-root .rb-head-icon {
+	flex: 0 0 auto;
+	width: 34px; height: 34px; line-height: 34px;
+	border-radius: 8px;
+	text-align: center;
+	background: var(--rb-soft-2);
+	color: var(--rb-accent);
+	font-size: 1rem;
+}
+.rb-root .rb-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.rb-root .rb-grid-2 > .rb-panel { margin-bottom: 0; }
+@media (max-width: 991px) { .rb-root .rb-grid-2 { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------ form layout */
+.rb-root .rb-fields { display: flex; flex-wrap: wrap; gap: 14px 18px; }
+.rb-root .rb-fieldset { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rb-root .rb-fieldset.rb-grow { flex: 1 1 280px; }
+.rb-root .rb-fieldset > label,
+.rb-root .rb-label { font-size: .85rem; font-weight: 600; color: #374151; margin: 0; }
+.rb-root .rb-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	margin-bottom: 8px;
+	background: #fff;
+	border: 1px solid var(--rb-border);
+	border-radius: 8px;
+	transition: border-color .15s;
+}
+.rb-root .rb-row:hover { border-color: var(--rb-border-strong); }
+.rb-root .rb-row.rb-plain { padding: 0; border: 0; background: transparent; margin-bottom: 10px; }
+.rb-root .rb-idx {
+	flex: 0 0 auto;
+	width: 24px; height: 24px; line-height: 24px;
+	border-radius: 50%;
+	text-align: center;
+	background: var(--rb-soft-2);
+	color: var(--rb-muted);
+	font-size: .8rem; font-weight: 700;
+}
+.rb-root .rb-row-end { margin-inline-start: auto; display: flex; gap: 4px; }
+.rb-root .rb-static { padding: 0 6px; font-weight: 600; }
+
+/* widths (the menus use autoWidth="false") */
+.rb-root .rb-w-xl { width: 320px; max-width: 100%; }
+.rb-root .rb-w-lg { width: 240px; max-width: 100%; }
+.rb-root .rb-w-md { width: 170px; max-width: 100%; }
+.rb-root .rb-w-sm { width: 120px; max-width: 100%; }
+.rb-root .rb-w-xs { width: 80px; }
+.rb-root .rb-full { width: 100%; }
+
+/* text inputs: Bootstrap's form-control is 100% wide by default; keep them inline here */
+.rb-root input.form-control,
+.rb-root .ui-inputfield.form-control {
+	display: inline-block;
+	height: 34px;
+	padding: 6px 10px;
+	border: 1px solid var(--rb-border-strong);
+	border-radius: 6px;
+	box-shadow: none;
+	background: #fff;
+	color: var(--rb-text);
+}
+.rb-root input.form-control:focus,
+.rb-root .ui-inputfield.form-control:focus { border-color: var(--rb-accent); box-shadow: 0 0 0 3px rgba(71, 85, 105, .12); outline: 0; }
+.rb-root .rb-input { width: 170px; max-width: 100%; }
+.rb-root .rb-input-lg { font-size: 1rem; font-weight: 600; }
+
+/* PrimeFaces menus: flat and grey instead of the theme gradient */
+.rb-root .ui-selectonemenu,
+.rb-root .ui-selectcheckboxmenu {
+	background: #fff;
+	border: 1px solid var(--rb-border-strong);
+	border-radius: 6px;
+	box-shadow: none;
+	vertical-align: middle;
+}
+.rb-root .ui-selectonemenu .ui-selectonemenu-label,
+.rb-root .ui-selectcheckboxmenu .ui-selectcheckboxmenu-label { background: transparent; padding: 7px 10px; font-weight: normal; color: var(--rb-text); }
+.rb-root .ui-selectonemenu .ui-selectonemenu-trigger,
+.rb-root .ui-selectcheckboxmenu .ui-selectcheckboxmenu-trigger { background: transparent; border: 0; box-shadow: none; }
+.rb-root .ui-selectonemenu.ui-state-focus,
+.rb-root .ui-selectcheckboxmenu.ui-state-focus { border-color: var(--rb-accent); box-shadow: 0 0 0 3px rgba(71, 85, 105, .12); }
+.rb-root .ui-calendar input { width: 150px; }
+
+/* ----------------------------------------------------------------- buttons */
+.rb-root .ui-button.rb-btn,
+.rb-root a.rb-btn {
+	display: inline-flex; align-items: center;
+	background: #fff !important;
+	border: 1px solid var(--rb-border-strong) !important;
+	border-radius: 6px;
+	color: #374151 !important;
+	text-shadow: none; box-shadow: none;
+	font-weight: 600;
+	text-decoration: none;
+}
+.rb-root .ui-button.rb-btn:hover,
+.rb-root a.rb-btn:hover { background: var(--rb-soft-2) !important; color: var(--rb-text) !important; }
+.rb-root a.rb-btn { padding: 6px 12px; line-height: 1.5; }
+.rb-root .ui-button.rb-btn-danger { color: var(--rb-danger) !important; border-color: #fecdca !important; }
+.rb-root .ui-button.rb-btn-danger:hover { background: #fef3f2 !important; }
+.rb-root .ui-button.rb-icon {
+	width: 32px; height: 32px; padding: 0;
+	justify-content: center;
+	color: var(--rb-muted) !important;
+	font-weight: normal;
+}
+.rb-root .ui-button.rb-icon .ui-button-text { padding: 0 !important; line-height: 30px; }
+.rb-root .ui-button.rb-icon:hover { color: var(--rb-text) !important; }
+.rb-root .ui-button.rb-icon.rb-icon-danger:hover { color: var(--rb-danger) !important; border-color: #fecdca !important; background: #fef3f2 !important; }
+.rb-root .ui-button.rb-add {
+	background: transparent !important;
+	border: 1px dashed var(--rb-border-strong) !important;
+	color: var(--rb-muted) !important;
+	border-radius: 8px;
+	text-shadow: none; box-shadow: none;
+	font-weight: 600;
+}
+.rb-root .ui-button.rb-add:hover { border-style: solid !important; color: var(--rb-text) !important; background: var(--rb-soft) !important; }
+.rb-root .ui-button.ui-state-disabled { opacity: .45; }
+.rb-root .rb-adds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+/* sticky action bar */
+.rb-root .rb-actionbar {
+	position: sticky; bottom: 0; z-index: 20;
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+	padding: 12px 16px;
+	margin: 0 0 16px;
+	background: rgba(255, 255, 255, .97);
+	border: 1px solid var(--rb-border);
+	border-radius: var(--rb-radius);
+	box-shadow: 0 -6px 16px rgba(16, 24, 40, .06);
+}
+.rb-root .rb-actionbar .ui-button { border-radius: 6px; }
+.rb-root .rb-actionbar .rb-spacer { flex: 1 1 auto; }
+
+/* ------------------------------------------------------------ conditions */
+.rb-root .rb-group {
+	background: var(--rb-soft);
+	border: 1px solid var(--rb-border);
+	border-radius: var(--rb-radius);
+	padding: 12px;
+	margin-bottom: 12px;
+}
+.rb-root .rb-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; color: #374151; font-weight: 600; }
+.rb-root .rb-group-head .rb-row-end { margin-inline-start: auto; }
+.rb-root .rb-connector { display: flex; justify-content: center; margin: -4px 0 8px; }
+.rb-root .rb-connector span {
+	background: #fff; border: 1px solid var(--rb-border-strong); border-radius: 999px;
+	padding: 1px 12px; font-size: .8rem; font-weight: 700; color: var(--rb-muted);
+}
+.rb-root .rb-between { color: var(--rb-muted); font-size: .85rem; padding: 0 2px; }
+.rb-root .rb-ask { display: inline-flex; align-items: center; gap: 6px; padding-inline-start: 8px; border-inline-start: 1px solid var(--rb-border); }
+
+/* ------------------------------------------------------------ notes, chips */
+.rb-root .rb-note {
+	display: flex; align-items: flex-start; gap: 8px;
+	margin-top: 14px; padding: 10px 12px;
+	background: var(--rb-soft);
+	border: 1px solid var(--rb-border);
+	border-inline-start: 3px solid var(--rb-accent);
+	border-radius: 8px;
+	color: #374151; font-size: .9rem;
+}
+.rb-root .rb-note .fa { color: var(--rb-accent); margin-top: 3px; }
+.rb-root .rb-hint { color: var(--rb-muted); font-size: .82rem; }
+.rb-root .rb-chip {
+	display: inline-flex; align-items: center; gap: 5px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--rb-soft-2);
+	color: #374151; font-size: .8rem; font-weight: 600;
+	white-space: nowrap;
+}
+.rb-root .rb-empty {
+	text-align: center;
+	padding: 36px 20px;
+	color: var(--rb-muted);
+	background: #fff;
+	border: 1px dashed var(--rb-border-strong);
+	border-radius: var(--rb-radius);
+	margin-bottom: 16px;
+}
+.rb-root .rb-empty .fa { font-size: 30px; color: #9ca3af; display: block; margin-bottom: 10px; }
+.rb-root .rb-empty-title { font-size: 1rem; font-weight: 700; color: #374151; margin-bottom: 4px; }
+
+/* ------------------------------------------------------------- results */
+.rb-root .rb-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rb-root .rb-table.ui-datatable { padding: 0; border: 1px solid var(--rb-border); border-radius: 8px; overflow: auto; }
+.rb-root .rb-table.ui-datatable table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.rb-root .rb-table.ui-datatable thead th {
+	background: var(--rb-soft-2) !important;
+	color: var(--rb-text);
+	font-weight: 700; font-size: .85rem;
+	padding: 10px 12px;
+	border: 0 !important;
+	border-bottom: 1px solid var(--rb-border) !important;
+	text-align: start;
+	white-space: nowrap;
+	position: sticky; top: 0; z-index: 1;
+}
+.rb-root .rb-table.ui-datatable tbody td {
+	padding: 9px 12px;
+	border: 0 !important;
+	border-bottom: 1px solid var(--rb-soft-2) !important;
+	color: #374151;
+	background: #fff;
+}
+.rb-root .rb-table.ui-datatable tbody tr:nth-child(even) td { background: #fcfcfd; }
+.rb-root .rb-table.ui-datatable tbody tr:hover td { background: #f5f7fa; }
+.rb-root .rb-table.ui-datatable tbody tr:last-child td { border-bottom: 0 !important; }
+.rb-root .rb-table.ui-datatable .rb-num { text-align: right; direction: ltr; font-variant-numeric: tabular-nums; font-weight: 600; }
+[dir="rtl"] .rb-root .rb-table.ui-datatable .rb-num { text-align: left; }
+
+/* messages */
+.rb-root .ui-messages > div { border-radius: 8px; }

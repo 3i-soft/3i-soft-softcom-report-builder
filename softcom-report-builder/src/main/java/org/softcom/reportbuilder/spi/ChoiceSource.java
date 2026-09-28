@@ -12,4 +12,14 @@ import java.util.Map;
 public interface ChoiceSource extends Serializable {
 
 	Map<String, String> choices();
+
+	/**
+	 * Display label of one stored value, or null when unknown. Override it when
+	 * a single value can be resolved more reliably than through the full list
+	 * (e.g. a code service that refreshes its cache on a miss).
+	 */
+	default String label(String storedValue) {
+		Map<String, String> all = choices();
+		return all == null ? null : all.get(storedValue);
+	}
 }

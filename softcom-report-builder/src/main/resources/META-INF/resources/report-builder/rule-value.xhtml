@@ -9,13 +9,13 @@
 		label="#{valueLabel}" />
 	<p:calendar value="#{rule.dateValue}" rendered="#{kind eq 'datetime'}" pattern="yyyy-MM-dd HH:mm" navigator="true" inputStyleClass="form-control rb-input"
 		label="#{valueLabel}" />
-	<p:selectOneMenu value="#{rule.value}" rendered="#{kind eq 'choice'}" filter="true" filterMatchMode="contains" styleClass="rb-input"
+	<p:selectOneMenu value="#{rule.value}" rendered="#{kind eq 'choice'}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg"
 		label="#{valueLabel}">
 		<f:selectItem itemLabel="-" itemValue="#{null}" noSelectionOption="true" />
 		<f:selectItems value="#{rbBean.choiceItems(rule)}" />
 	</p:selectOneMenu>
 	<p:selectCheckboxMenu value="#{rule.selected}" rendered="#{kind eq 'choiceList'}" filter="true" filterMatchMode="contains"
-		label="#{rbbundle['rb.choose']}" updateLabel="true" styleClass="rb-input">
+		label="#{rbbundle['rb.choose']}" updateLabel="true" styleClass="rb-w-lg">
 		<f:selectItems value="#{rbBean.choiceItems(rule)}" />
 	</p:selectCheckboxMenu>
 	<p:inputText value="#{rule.listText}" rendered="#{kind eq 'list'}" styleClass="form-control rb-input" placeholder="#{rbbundle['rb.listHint']}"

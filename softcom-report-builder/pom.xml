@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>org.softcom</groupId>
+	<artifactId>softcom-report-builder</artifactId>
+	<version>1.0.0</version>
+	<name>softcom-report-builder</name>
+	<description>Runtime (user-defined) report builder for Java EE 7 / JPA 2.1 applications: users pick a data source,
+		columns, AND/OR conditions, grouping and totals; the engine turns the definition into a safe JPA Criteria query
+		against the host application's own database.</description>
+
+	<parent>
+		<artifactId>softcom-parent-jee7</artifactId>
+		<groupId>org.softcom</groupId>
+		<version>2.0.0</version>
+	</parent>
+
+	<properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	</properties>
+
+	<dependencies>
+		<!-- Everything below is supplied by the host application / WildFly: the library adds no runtime jars. -->
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+			<version>7.0</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<!-- IPersistenceHelper: the host application's EntityManager (same convention as softcom-customized-view) -->
+			<groupId>org.softcom</groupId>
+			<artifactId>softcom-persistence</artifactId>
+			<version>1.0.8</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<!-- Compiled against the oldest POI used by the host apps (generalWarehouse: 3.16; accounting/HR: 4.0.x) -->
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>3.16</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- Tests: run the real query engine on EclipseLink 2.6.0 (same version as the host apps) against H2 -->
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.12</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.persistence</groupId>
+			<artifactId>eclipselink</artifactId>
+			<version>2.6.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<version>1.4.200</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish</groupId>
+			<artifactId>javax.json</artifactId>
+			<version>1.0.4</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<!-- Only for running the tests against a real PostgreSQL: mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtest -->
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>42.7.4</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>softcom-report-builder</finalName>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<includes>
+					<include>**/*</include>
+				</includes>
+			</resource>
+			<resource>
+				<directory>src/main/java/resources</directory>
+				<targetPath>resources</targetPath>
+				<includes>
+					<include>*.properties</include>
+				</includes>
+			</resource>
+		</resources>
+	</build>
+
+	<profiles>
+		<profile>
+			<!-- When built on a newer JDK, guarantee that only Java 8 APIs are used. -->
+			<id>jdk9plus</id>
+			<activation>
+				<jdk>[9,)</jdk>
+			</activation>
+			<properties>
+				<maven.compiler.release>8</maven.compiler.release>
+			</properties>
+		</profile>
+	</profiles>
+</project>

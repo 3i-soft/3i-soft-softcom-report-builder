@@ -1,0 +1,172 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml" xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
+	xmlns:h="http://xmlns.jcp.org/jsf/html" xmlns:f="http://xmlns.jcp.org/jsf/core" xmlns:p="http://primefaces.org/ui">
+	<!--
+		Report designer. Include it OUTSIDE any h:form:
+		  <ui:include src="/report-builder/designer-snippet.xhtml" />
+		Optional param: viewerPage (view id or outcome of the page including viewer-snippet.xhtml).
+	-->
+	<h:outputStylesheet library="report-builder" name="rb.css" />
+	<h:form id="rbDesignerForm">
+		<f:event type="preRenderView" listener="#{rbDesigner.touch}" />
+		<p:messages id="rbMessages" closable="true" styleClass="rb-messages" />
+		<p:defaultCommand target="rbPreview" />
+		<h:panelGroup rendered="#{rbDesigner.canDesign}">
+
+			<div class="rb-card">
+				<h5>#{rbbundle['rb.section.general']}</h5>
+				<div class="rb-row">
+					<h:outputLabel for="rbName" value="#{rbbundle['rb.name']}" />
+					<p:inputText id="rbName" value="#{rbDesigner.name}" maxlength="200" styleClass="form-control rb-field" />
+				</div>
+				<div class="rb-row">
+					<h:outputLabel for="rbDescription" value="#{rbbundle['rb.description']}" />
+					<p:inputText id="rbDescription" value="#{rbDesigner.description}" maxlength="1000" styleClass="form-control rb-field" />
+				</div>
+				<div class="rb-row">
+					<h:outputLabel for="rbDataSource" value="#{rbbundle['rb.dataSource']}" />
+					<p:selectOneMenu id="rbDataSource" value="#{rbDesigner.dataSourceKey}" styleClass="rb-field">
+						<f:selectItem itemLabel="#{rbbundle['rb.chooseDataSource']}" itemValue="#{null}" noSelectionOption="true" />
+						<f:selectItems value="#{rbDesigner.dataSourceItems}" />
+						<p:ajax listener="#{rbDesigner.onDataSourceChange}" process="@form" update="@form" />
+					</p:selectOneMenu>
+				</div>
+				<h:panelGroup layout="block" styleClass="rb-note" rendered="#{rbDesigner.requiredFilterNote ne null}">
+					#{rbDesigner.requiredFilterNote}
+				</h:panelGroup>
+			</div>
+
+			<h:panelGroup rendered="#{rbDesigner.dataSource ne null}">
+				<h:panelGroup id="rbColumns" layout="block" styleClass="rb-card rb-columns">
+					<h5>#{rbbundle['rb.section.columns']}</h5>
+					<ui:repeat value="#{rbDesigner.columns}" var="col" varStatus="st">
+						<div class="rb-row">
+							<span class="rb-idx">#{st.index + 1}</span>
+							<p:selectOneMenu value="#{col.field}" rendered="#{col.field ne '*'}" filter="true" filterMatchMode="contains" styleClass="rb-field">
+								<f:selectItem itemLabel="#{rbbundle['rb.chooseField']}" itemValue="#{null}" noSelectionOption="true" />
+								<f:selectItems value="#{rbDesigner.columnFieldItems}" />
+								<p:ajax listener="#{rbDesigner.onColumnFieldChange(col)}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+							</p:selectOneMenu>
+							<h:outputText value="#{rbbundle['rb.rowCount']}" rendered="#{col.field eq '*'}" styleClass="rb-field" />
+							<p:selectOneMenu value="#{col.aggregate}" title="#{rbbundle['rb.aggregate']}">
+								<f:selectItems value="#{rbDesigner.aggregateItems(col)}" />
+								<p:ajax process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+							</p:selectOneMenu>
+							<p:inputText value="#{col.label}" placeholder="#{rbbundle['rb.columnLabel']}" maxlength="100" styleClass="form-control rb-input" />
+							<p:commandButton value="&#8593;" title="#{rbbundle['rb.moveUp']}" action="#{rbDesigner.moveColumn(st.index, -1)}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+							<p:commandButton value="&#8595;" title="#{rbbundle['rb.moveDown']}" action="#{rbDesigner.moveColumn(st.index, 1)}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+							<p:commandButton value="&#10005;" title="#{rbbundle['rb.remove']}" action="#{rbDesigner.removeColumn(st.index)}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+							<h:outputText value="#{rbDesigner.fieldHint(col.field)}" rendered="#{rbDesigner.fieldHint(col.field) ne null}" styleClass="rb-hint" />
+						</div>
+					</ui:repeat>
+					<div class="rb-actions">
+						<p:commandButton value="#{rbbundle['rb.addColumn']}" icon="fa fa-plus" action="#{rbDesigner.addColumn}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+						<p:commandButton value="#{rbbundle['rb.addRowCount']}" icon="fa fa-plus" action="#{rbDesigner.addRowCountColumn}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
+					</div>
+					<h:outputText value="#{rbbundle['rb.groupedHint']}" rendered="#{rbDesigner.grouped}" styleClass="rb-hint" />
+				</h:panelGroup>
+
+				<h:panelGroup id="rbConditions" layout="block" styleClass="rb-card rb-conditions">
+					<h5>#{rbbundle['rb.section.conditions']}</h5>
+					<h:panelGroup layout="block" styleClass="rb-row" rendered="#{rbDesigner.groups.size() gt 1}">
+						<h:outputLabel value="#{rbbundle['rb.groupsCombined']}" />
+						<p:selectOneMenu value="#{rbDesigner.topLogic}">
+							<f:selectItems value="#{rbDesigner.logicItems}" />
+						</p:selectOneMenu>
+					</h:panelGroup>
+					<ui:repeat value="#{rbDesigner.groups}" var="g">
+						<div class="rb-group">
+							<div class="rb-group-head">
+								<h:outputLabel value="#{rbbundle['rb.groupMatch']}" />
+								<p:selectOneMenu value="#{g.logic}">
+									<f:selectItems value="#{rbDesigner.logicItems}" />
+								</p:selectOneMenu>
+								<p:commandButton value="&#10005;" title="#{rbbundle['rb.removeGroup']}" action="#{rbDesigner.removeGroup(g)}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+							</div>
+							<ui:repeat value="#{g.rules}" var="rule">
+								<div class="rb-row">
+									<p:selectOneMenu value="#{rule.field}" filter="true" filterMatchMode="contains" styleClass="rb-field">
+										<f:selectItem itemLabel="#{rbbundle['rb.chooseField']}" itemValue="#{null}" noSelectionOption="true" />
+										<f:selectItems value="#{rbDesigner.filterFieldItems}" />
+										<p:ajax listener="#{rbDesigner.onRuleFieldChange(rule)}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+									</p:selectOneMenu>
+									<p:selectOneMenu value="#{rule.operator}" rendered="#{rule.field ne null}">
+										<f:selectItems value="#{rbDesigner.operatorItems(rule)}" />
+										<p:ajax listener="#{rbDesigner.onRuleOperatorChange(rule)}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+									</p:selectOneMenu>
+									<ui:include src="/report-builder/rule-value.xhtml">
+										<ui:param name="rule" value="#{rule}" />
+										<ui:param name="rbBean" value="#{rbDesigner}" />
+									</ui:include>
+									<h:panelGroup rendered="#{rule.field ne null and rbDesigner.valueKind(rule) ne 'none'}">
+										<p:selectBooleanCheckbox value="#{rule.askAtRun}" itemLabel="#{rbbundle['rb.askAtRun']}">
+											<p:ajax process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+										</p:selectBooleanCheckbox>
+										<p:inputText value="#{rule.label}" rendered="#{rule.askAtRun}" placeholder="#{rbbundle['rb.promptLabel']}" maxlength="100" styleClass="form-control rb-input" />
+									</h:panelGroup>
+									<p:commandButton value="&#10005;" title="#{rbbundle['rb.remove']}" action="#{rbDesigner.removeRule(g, rule)}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+								</div>
+							</ui:repeat>
+							<p:commandButton value="#{rbbundle['rb.addCondition']}" icon="fa fa-plus" action="#{rbDesigner.addRule(g)}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+						</div>
+					</ui:repeat>
+					<p:commandButton value="#{rbbundle['rb.addGroup']}" icon="fa fa-plus" action="#{rbDesigner.addGroup}" process="@form" update="@(.rb-conditions) @(.rb-messages)" />
+				</h:panelGroup>
+
+				<h:panelGroup id="rbSort" layout="block" styleClass="rb-card rb-sort">
+					<h5>#{rbbundle['rb.section.sort']}</h5>
+					<ui:repeat value="#{rbDesigner.sorts}" var="s" varStatus="st">
+						<div class="rb-row">
+							<p:selectOneMenu value="#{s.column}" styleClass="rb-field">
+								<f:selectItems value="#{rbDesigner.sortColumnItems}" />
+							</p:selectOneMenu>
+							<p:selectOneMenu value="#{s.descending}">
+								<f:selectItem itemLabel="#{rbbundle['rb.ascending']}" itemValue="#{false}" />
+								<f:selectItem itemLabel="#{rbbundle['rb.descending']}" itemValue="#{true}" />
+							</p:selectOneMenu>
+							<p:commandButton value="&#10005;" title="#{rbbundle['rb.remove']}" action="#{rbDesigner.removeSort(st.index)}" process="@form" update="@(.rb-sort) @(.rb-messages)" />
+						</div>
+					</ui:repeat>
+					<p:commandButton value="#{rbbundle['rb.addSort']}" icon="fa fa-plus" action="#{rbDesigner.addSort}" process="@form" update="@(.rb-sort) @(.rb-messages)"
+						disabled="#{empty rbDesigner.columns}" />
+				</h:panelGroup>
+
+				<h:panelGroup id="rbSharing" layout="block" styleClass="rb-card rb-sharing">
+					<h5>#{rbbundle['rb.section.sharing']}</h5>
+					<div class="rb-row">
+						<p:selectBooleanCheckbox value="#{rbDesigner.shared}" itemLabel="#{rbbundle['rb.shared']}">
+							<p:ajax process="@form" update="@(.rb-sharing)" />
+						</p:selectBooleanCheckbox>
+					</div>
+					<h:panelGroup layout="block" styleClass="rb-row" rendered="#{rbDesigner.shared}">
+						<h:outputLabel for="rbSharedRoles" value="#{rbbundle['rb.sharedRoles']}" />
+						<p:inputText id="rbSharedRoles" value="#{rbDesigner.sharedRoles}" maxlength="1000" styleClass="form-control rb-field" />
+						<span class="rb-hint">#{rbbundle['rb.sharedRolesHint']}</span>
+					</h:panelGroup>
+				</h:panelGroup>
+			</h:panelGroup>
+
+			<div class="rb-actions">
+				<p:commandButton id="rbPreview" value="#{rbbundle['rb.preview']}" icon="fa fa-eye" action="#{rbDesigner.preview}" process="@form" update="@form"
+					disabled="#{rbDesigner.dataSource eq null}" styleClass="btn btn-info" />
+				<p:commandButton value="#{rbbundle['rb.save']}" icon="fa fa-save" action="#{rbDesigner.save}" process="@form" update="@form"
+					disabled="#{rbDesigner.dataSource eq null or not rbDesigner.editable}" styleClass="btn btn-success" />
+				<p:commandButton value="#{rbbundle['rb.saveAsNew']}" icon="fa fa-copy" action="#{rbDesigner.saveAsNew}" process="@form" update="@form"
+					rendered="#{rbDesigner.definitionId ne null}" styleClass="btn btn-default" />
+				<p:commandButton value="#{rbbundle['rb.exportExcel']}" icon="fa fa-file-excel-o" action="#{rbDesigner.exportExcel}" ajax="false"
+					disabled="#{rbDesigner.dataSource eq null}" styleClass="btn btn-default" />
+				<p:commandButton value="#{rbbundle['rb.new']}" icon="fa fa-file-o" action="#{rbDesigner.newReport}" process="@this" update="@form" styleClass="btn btn-default" />
+				<p:commandButton value="#{rbbundle['rb.delete']}" icon="fa fa-trash" action="#{rbDesigner.delete}" process="@this" update="@form"
+					rendered="#{rbDesigner.definitionId ne null and rbDesigner.editable}" onclick="return confirm('#{rbbundle['rb.confirmDelete']}');"
+					styleClass="btn btn-danger" />
+				<h:link outcome="#{viewerPage}" value="#{rbbundle['rb.openViewer']}" rendered="#{not empty viewerPage and rbDesigner.definitionId ne null}"
+					styleClass="btn btn-default">
+					<f:param name="id" value="#{rbDesigner.definitionId}" />
+				</h:link>
+			</div>
+
+			<ui:include src="/report-builder/result-table.xhtml">
+				<ui:param name="rbBean" value="#{rbDesigner}" />
+			</ui:include>
+		</h:panelGroup>
+	</h:form>
+</ui:composition>

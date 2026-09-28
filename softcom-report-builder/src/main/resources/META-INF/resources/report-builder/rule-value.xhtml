@@ -1,0 +1,31 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml" xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
+	xmlns:h="http://xmlns.jcp.org/jsf/html" xmlns:f="http://xmlns.jcp.org/jsf/core" xmlns:p="http://primefaces.org/ui">
+	<!-- Value input(s) of one condition. Params: rule (RuleEditor), rbBean (designer or viewer bean). -->
+	<ui:param name="kind" value="#{rbBean.valueKind(rule)}" />
+	<ui:param name="valueLabel" value="#{rbBean.fieldLabel(rule.field)}" />
+	<p:inputText value="#{rule.value}" rendered="#{kind eq 'text' or kind eq 'number'}" styleClass="form-control rb-input" maxlength="500"
+		label="#{valueLabel}" />
+	<p:calendar value="#{rule.dateValue}" rendered="#{kind eq 'date'}" pattern="yyyy-MM-dd" navigator="true" inputStyleClass="form-control rb-input"
+		label="#{valueLabel}" />
+	<p:calendar value="#{rule.dateValue}" rendered="#{kind eq 'datetime'}" pattern="yyyy-MM-dd HH:mm" navigator="true" inputStyleClass="form-control rb-input"
+		label="#{valueLabel}" />
+	<p:selectOneMenu value="#{rule.value}" rendered="#{kind eq 'choice'}" filter="true" filterMatchMode="contains" styleClass="rb-input"
+		label="#{valueLabel}">
+		<f:selectItem itemLabel="-" itemValue="#{null}" noSelectionOption="true" />
+		<f:selectItems value="#{rbBean.choiceItems(rule)}" />
+	</p:selectOneMenu>
+	<p:selectCheckboxMenu value="#{rule.selected}" rendered="#{kind eq 'choiceList'}" filter="true" filterMatchMode="contains"
+		label="#{rbbundle['rb.choose']}" updateLabel="true" styleClass="rb-input">
+		<f:selectItems value="#{rbBean.choiceItems(rule)}" />
+	</p:selectCheckboxMenu>
+	<p:inputText value="#{rule.listText}" rendered="#{kind eq 'list'}" styleClass="form-control rb-input" placeholder="#{rbbundle['rb.listHint']}"
+		label="#{valueLabel}" />
+	<h:panelGroup rendered="#{rbBean.hasSecondValue(rule)}">
+		<span class="rb-between">#{rbbundle['rb.and']}</span>
+		<p:inputText value="#{rule.value2}" rendered="#{kind eq 'number' or kind eq 'text'}" styleClass="form-control rb-input" label="#{valueLabel}" />
+		<p:calendar value="#{rule.dateValue2}" rendered="#{kind eq 'date'}" pattern="yyyy-MM-dd" navigator="true" inputStyleClass="form-control rb-input"
+			label="#{valueLabel}" />
+		<p:calendar value="#{rule.dateValue2}" rendered="#{kind eq 'datetime'}" pattern="yyyy-MM-dd HH:mm" navigator="true"
+			inputStyleClass="form-control rb-input" label="#{valueLabel}" />
+	</h:panelGroup>
+</ui:composition>

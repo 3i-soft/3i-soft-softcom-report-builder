@@ -1,0 +1,17 @@
+/* softcom-report-builder: minimal layout, inherits the host application's Bootstrap/PrimeFaces theme. */
+.rb-card { margin-bottom: 1rem; padding: 1rem; border: 1px solid #e3e6ea; border-radius: 4px; background: #fff; }
+.rb-card h5 { margin: 0 0 .75rem 0; font-weight: 600; }
+.rb-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.rb-row > label { margin: 0; min-width: 7rem; }
+.rb-idx { min-width: 1.5rem; color: #6c757d; }
+.rb-field { min-width: 16rem; }
+.rb-input { min-width: 12rem; }
+.rb-group { border: 1px dashed #c9ced4; border-radius: 4px; padding: .75rem; margin-bottom: .75rem; }
+.rb-group-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.rb-between { color: #6c757d; font-size: .9em; }
+.rb-note { color: #856404; background: #fff3cd; border-radius: 4px; padding: .4rem .6rem; margin-bottom: .75rem; }
+.rb-hint { color: #6c757d; font-size: .85em; }
+.rb-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+.rb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .5rem 0; }
+.rb-page-info { color: #6c757d; }
+.rb-table td.rb-num, .rb-table th.rb-num { text-align: end; direction: ltr; }

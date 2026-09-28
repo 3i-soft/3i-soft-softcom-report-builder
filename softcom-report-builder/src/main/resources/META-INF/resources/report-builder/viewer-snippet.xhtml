@@ -1,0 +1,59 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml" xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
+	xmlns:h="http://xmlns.jcp.org/jsf/html" xmlns:f="http://xmlns.jcp.org/jsf/core" xmlns:p="http://primefaces.org/ui">
+	<!--
+		Runs saved reports. Include it OUTSIDE any h:form:
+		  <ui:include src="/report-builder/viewer-snippet.xhtml">
+		    <ui:param name="designerPage" value="/views/pages/custom-report-designer.xhtml" />
+		  </ui:include>
+		designerPage (optional): view id or outcome of the page including designer-snippet.xhtml.
+	-->
+	<h:outputStylesheet library="report-builder" name="rb.css" />
+	<h:form id="rbViewerForm">
+		<f:event type="preRenderView" listener="#{rbViewer.touch}" />
+		<p:messages id="rbMessages" closable="true" styleClass="rb-messages" />
+		<h:panelGroup rendered="#{rbViewer.canRun}">
+			<div class="rb-card">
+				<div class="rb-row">
+					<h:outputLabel for="rbReport" value="#{rbbundle['rb.report']}" />
+					<p:selectOneMenu id="rbReport" value="#{rbViewer.selectedId}" filter="true" filterMatchMode="contains" styleClass="rb-field">
+						<f:selectItem itemLabel="#{rbbundle['rb.chooseReport']}" itemValue="#{null}" noSelectionOption="true" />
+						<f:selectItems value="#{rbViewer.reportItems}" />
+						<p:ajax listener="#{rbViewer.onSelect}" process="@this" update="@form" />
+					</p:selectOneMenu>
+					<h:link outcome="#{designerPage}" value="#{rbbundle['rb.newReport']}" rendered="#{not empty designerPage and rbViewer.canDesign}"
+						styleClass="btn btn-default" />
+				</div>
+				<h:panelGroup layout="block" styleClass="rb-hint" rendered="#{not empty rbViewer.selectedDescription}">
+					#{rbViewer.selectedDescription}
+				</h:panelGroup>
+			</div>
+
+			<h:panelGroup layout="block" styleClass="rb-card" rendered="#{rbViewer.selectedId ne null}">
+				<h:panelGroup rendered="#{not empty rbViewer.parameters}">
+					<h5>#{rbbundle['rb.parameters']}</h5>
+					<ui:repeat value="#{rbViewer.parameters}" var="rule">
+						<div class="rb-row">
+							<h:outputLabel value="#{rbViewer.parameterLabel(rule)}" />
+							<ui:include src="/report-builder/rule-value.xhtml">
+								<ui:param name="rule" value="#{rule}" />
+								<ui:param name="rbBean" value="#{rbViewer}" />
+							</ui:include>
+						</div>
+					</ui:repeat>
+				</h:panelGroup>
+				<div class="rb-actions">
+					<p:commandButton value="#{rbbundle['rb.run']}" icon="fa fa-play" action="#{rbViewer.run}" process="@form" update="@form" styleClass="btn btn-success" />
+					<p:commandButton value="#{rbbundle['rb.exportExcel']}" icon="fa fa-file-excel-o" action="#{rbViewer.exportExcel}" ajax="false" styleClass="btn btn-default" />
+					<h:link outcome="#{designerPage}" value="#{rbViewer.selectedEditable ? rbbundle['rb.edit'] : rbbundle['rb.copyDesign']}"
+						rendered="#{not empty designerPage and rbViewer.canDesign}" styleClass="btn btn-default">
+						<f:param name="id" value="#{rbViewer.selectedId}" />
+					</h:link>
+				</div>
+			</h:panelGroup>
+
+			<ui:include src="/report-builder/result-table.xhtml">
+				<ui:param name="rbBean" value="#{rbViewer}" />
+			</ui:include>
+		</h:panelGroup>
+	</h:form>
+</ui:composition>

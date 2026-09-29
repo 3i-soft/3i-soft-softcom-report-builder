@@ -144,7 +144,7 @@ public final class EntityDiscovery {
 
 	private static ReportDataSource entitySource(EntityType<?> t, LabelResolver labels, Options options) {
 		ReportDataSource ds = new ReportDataSource(KEY_PREFIX + t.getName(), t.getJavaType())
-				.labels(labels.entityAr(t.getName()), labels.entityEn(t.getName()));
+				.labels(labels.entityAr(t.getName(), t.getJavaType()), labels.entityEn(t.getName(), t.getJavaType()));
 		Builder b = new Builder(ds, labels, options, null);
 		b.addFields(t, "", 0, null, null);
 		return finish(ds, options);
@@ -162,10 +162,10 @@ public final class EntityDiscovery {
 		String name = c.getName();
 		if (!IDENTIFIER.matcher(name).matches())
 			return null;
-		String ownerAr = labels.entityAr(owner.getName());
-		String ownerEn = labels.entityEn(owner.getName());
-		String relAr = labels.attributeAr(owner.getName(), name);
-		String relEn = labels.attributeEn(owner.getName(), name);
+		String ownerAr = labels.entityAr(owner.getName(), owner.getJavaType());
+		String ownerEn = labels.entityEn(owner.getName(), owner.getJavaType());
+		String relAr = labels.attributeAr(owner.getName(), name, member(c));
+		String relEn = labels.attributeEn(owner.getName(), name, member(c));
 		ReportDataSource ds = new ReportDataSource(KEY_PREFIX + owner.getName() + "." + name, owner.getJavaType())
 				.labels(combineAr(ownerAr, ownerEn, relAr, relEn), ownerEn + " - " + relEn)
 				.join(name, JoinType.INNER).grain(name, elementId).joinLabels(name, relAr, relEn);
@@ -215,8 +215,9 @@ public final class EntityDiscovery {
 
 		private void addAttribute(Attribute<?, ?> a, String entity, String name, String prefix, int depth,
 				String labelPrefixAr, String labelPrefixEn) {
-			String ar = labels.attributeAr(entity, name);
-			String en = labels.attributeEn(entity, name);
+			AnnotatedElement member = member(a);
+			String ar = labels.attributeAr(entity, name, member);
+			String en = labels.attributeEn(entity, name, member);
 			String fullAr = labelPrefixEn == null ? ar : combineAr(labelPrefixAr, labelPrefixEn, ar, en);
 			String fullEn = labelPrefixEn == null ? en : labelPrefixEn + " - " + en;
 			switch (a.getPersistentAttributeType()) {
@@ -258,11 +259,20 @@ public final class EntityDiscovery {
 		}
 	}
 
+	/** The attribute's field or getter (for its annotations), or null when the provider cannot give it. */
+	private static AnnotatedElement member(Attribute<?, ?> a) {
+		try {
+			Member m = a.getJavaMember();
+			return m instanceof AnnotatedElement ? (AnnotatedElement) m : null;
+		} catch (RuntimeException e) {
+			return null;
+		}
+	}
+
 	/** Logical type of a simple attribute, or null when it cannot be reported on. */
 	static FieldType fieldType(Attribute<?, ?> a) {
 		Class<?> c = ValueConverter.wrap(a.getJavaType());
-		Member member = a.getJavaMember();
-		AnnotatedElement annotated = member instanceof AnnotatedElement ? (AnnotatedElement) member : null;
+		AnnotatedElement annotated = member(a);
 		if (annotated != null && (annotated.isAnnotationPresent(Lob.class) || annotated.isAnnotationPresent(Version.class)))
 			return null;
 		if (c == String.class)

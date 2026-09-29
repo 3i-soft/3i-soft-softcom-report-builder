@@ -6,10 +6,12 @@ import javax.persistence.ManyToOne;
 import javax.persistence.Table;
 
 @Entity
+@EntityInfo(label = " المخازن")
 @Table(name = "t_warehouse")
 public class TWarehouse {
 	@Id
 	private Long id;
+	@FieldInfo(label = "اسم المخزن")
 	private String name;
 	@ManyToOne(optional = false)
 	private TCompany company;

@@ -169,6 +169,18 @@ public class AutoDataSourceTest {
 	}
 
 	@Test
+	public void labelsTheEntityAuthorWroteInAnnotationsAreUsed() {
+		Map<String, ReportDataSource> all = discover();
+		assertEquals("@EntityInfo(label), trimmed", "المخازن", all.get("auto.TWarehouse").getLabel(AR));
+		assertEquals("@FieldInfo(label)", "اسم المخزن", all.get("auto.TWarehouse").getField("name").getLabel(AR));
+		ReportField company = all.get("auto.TCompany").getField("name");
+		assertEquals("Arabic from @FieldViewConfiguration(displayName)", "اسم الشركة", company.getLabel(AR));
+		assertEquals("English from @FieldInfo(label)", "Company name", company.getLabel(Locale.ENGLISH));
+		assertEquals("through a relation", "Warehouse - اسم المخزن",
+				all.get("auto.TInvoice").getField("warehouse.name").getLabel(AR));
+	}
+
+	@Test
 	public void excludedEntitiesAreNeitherOfferedNorReachable() {
 		Map<String, ReportDataSource> all = discover(new EntityDiscovery.Options().exclude("TCustomer").depth(1));
 		assertFalse(all.containsKey("auto.TCustomer"));

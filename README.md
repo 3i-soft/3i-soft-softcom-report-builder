@@ -55,10 +55,10 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
 4. **Tables.** Copy `src/main/resources/META-INF/softcom-report-builder/sql/postgresql-1.0.0.sql` into the app's
    Flyway folder as its next version. The script is idempotent.
 
-5. **Data sources.** Nothing to do: every entity is offered automatically. Keep the library in the WAR's own
-   `WEB-INF/lib` (its caches are per application). Optionally add hand-written data sources - curated Arabic labels,
-   forced filters such as the user's warehouses, computed fields - with a CDI bean implementing
-   `ReportDataSourceProvider`. See `GwReportDataSourceProvider` in generalWarehouse for a complete example. Example:
+5. **Data sources.** Nothing to do: every entity is offered automatically (generalWarehouse has no report code at
+   all). Keep the library in the WAR's own `WEB-INF/lib` (its caches are per application). Hand-written data sources
+   remain possible for special cases - forced filters such as the user's warehouses, computed fields - with a CDI
+   bean implementing `ReportDataSourceProvider`, e.g.:
 
    ```java
    @ApplicationScoped
@@ -166,10 +166,13 @@ work on timestamp columns and still use an index. DATETIME fields do the same wh
 
 1. `rblabels_ar.properties` / `rblabels_en.properties` in the WAR (optional): `SalesInvoice=فواتير المبيعات`,
    `SalesInvoice.completionDate=تاريخ الإنهاء`, `completionDate=...` (any entity) or `MyEnum.CONSTANT=...`;
-2. the application's own bundles declared in its `faces-config.xml` files, by attribute name or its snake_case
-   (`purchasePrice` or `purchase_price`) - in generalWarehouse about half of the entity attributes have one;
-3. common words built into the library (`name`, `code`, `quantity`, `price`, `date`...);
-4. the name split into words (`purchasePrice` -> "Purchase price").
+2. the labels already written on the entities with the 3i-soft annotations: `@EntityInfo(label)` on the class,
+   `@FieldInfo(label)` / `@FieldViewConfiguration(displayName)` on the attribute (matched by annotation name, so the
+   library does not depend on those jars);
+3. the application's own bundles declared in its `faces-config.xml` files, by attribute name or its snake_case
+   (`purchasePrice` or `purchase_price`);
+4. common words built into the library (`name`, `code`, `quantity`, `price`, `date`...);
+5. the name split into words (`purchasePrice` -> "Purchase price").
 
 **Settings** (`web.xml` context parameters, or system properties with the same name; all optional):
 

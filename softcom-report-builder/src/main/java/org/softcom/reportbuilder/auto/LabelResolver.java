@@ -2,6 +2,8 @@ package org.softcom.reportbuilder.auto;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +32,10 @@ import org.w3c.dom.NodeList;
  * <li>the application's optional {@code rblabels} bundle (rblabels_ar /
  * rblabels_en .properties), keys {@code Entity}, {@code Entity.attribute},
  * {@code attribute} or {@code EnumType.CONSTANT};</li>
+ * <li>the labels the entity's author already wrote in 3i-soft annotations:
+ * {@code @EntityInfo(label)} on the class, {@code @FieldInfo(label)} and
+ * {@code @FieldViewConfiguration(displayName)} on the attribute (found by
+ * name, so no dependency on those libraries);</li>
  * <li>the application's own JSF resource bundles (those declared in
  * faces-config.xml), whose keys are often the attribute name or its
  * snake_case form (purchasePrice / purchase_price);</li>
@@ -85,28 +91,84 @@ public class LabelResolver {
 	// ------------------------------------------------------------ lookups
 
 	public String entityAr(String entity) {
+		return entityAr(entity, null);
+	}
+
+	/** @param type the entity class, whose {@code @EntityInfo(label)} is used when present */
+	public String entityAr(String entity, Class<?> type) {
 		String s = find(overrides, true, entity);
+		if (s == null)
+			s = annotationLabel(type, ENTITY_LABELS, true);
 		return s != null ? s : find(hostBundles, true, snake(entity), entity.toLowerCase(Locale.ROOT), entity, decapitalize(entity));
 	}
 
 	public String entityEn(String entity) {
+		return entityEn(entity, null);
+	}
+
+	public String entityEn(String entity, Class<?> type) {
 		String s = find(overrides, false, entity);
+		if (s == null)
+			s = annotationLabel(type, ENTITY_LABELS, false);
 		return s != null ? s : humanize(entity);
 	}
 
 	/** Arabic label of an attribute, or null when none is known. */
 	public String attributeAr(String entity, String attribute) {
+		return attributeAr(entity, attribute, null);
+	}
+
+	/** @param member the attribute's field or getter, whose label annotations are used when present */
+	public String attributeAr(String entity, String attribute, AnnotatedElement member) {
 		String s = find(overrides, true, entity + "." + attribute, attribute);
+		if (s == null)
+			s = annotationLabel(member, FIELD_LABELS, true);
 		if (s == null)
 			s = find(hostBundles, true, attribute, snake(attribute), attribute.toLowerCase(Locale.ROOT));
 		return s != null ? s : find(defaults, true, DEFAULT_WORD_PREFIX + attribute);
 	}
 
 	public String attributeEn(String entity, String attribute) {
+		return attributeEn(entity, attribute, null);
+	}
+
+	public String attributeEn(String entity, String attribute, AnnotatedElement member) {
 		String s = find(overrides, false, entity + "." + attribute, attribute);
+		if (s == null)
+			s = annotationLabel(member, FIELD_LABELS, false);
 		if (s == null)
 			s = find(defaults, false, DEFAULT_WORD_PREFIX + attribute);
 		return s != null ? s : humanize(attribute);
+	}
+
+	/** {annotation simple name, element holding the label}, in order of preference. */
+	private static final String[][] FIELD_LABELS = { { "FieldInfo", "label" }, { "FieldViewConfiguration", "displayName" } };
+	private static final String[][] ENTITY_LABELS = { { "EntityInfo", "label" } };
+
+	/** The first label annotation value in the wanted language, or null. */
+	static String annotationLabel(AnnotatedElement element, String[][] kinds, boolean arabic) {
+		if (element == null)
+			return null;
+		Annotation[] annotations;
+		try {
+			annotations = element.getAnnotations();
+		} catch (RuntimeException | LinkageError e) {
+			return null;
+		}
+		for (String[] kind : kinds)
+			for (Annotation a : annotations) {
+				if (!a.annotationType().getSimpleName().equals(kind[0]))
+					continue;
+				try {
+					Object v = a.annotationType().getMethod(kind[1]).invoke(a);
+					String label = v instanceof String ? ((String) v).trim() : "";
+					if (!label.isEmpty() && hasArabic(label) == arabic)
+						return label;
+				} catch (ReflectiveOperationException | RuntimeException e) {
+					// annotation without that element: ignore it
+				}
+			}
+		return null;
 	}
 
 	public String enumAr(Class<?> enumType, String constant) {

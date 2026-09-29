@@ -30,6 +30,13 @@ public class ReportCatalog implements Serializable {
 
 	private transient volatile Map<String, ReportDataSource> dataSources;
 
+	/** Builds the data sources again on next use (e.g. after labels were changed): no restart needed. */
+	public void refresh() {
+		synchronized (this) {
+			dataSources = null;
+		}
+	}
+
 	public ReportDataSource get(String key) {
 		return key == null ? null : all().get(key);
 	}

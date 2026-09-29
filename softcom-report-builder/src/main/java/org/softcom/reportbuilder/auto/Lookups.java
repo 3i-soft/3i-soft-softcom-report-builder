@@ -56,7 +56,7 @@ final class Lookups {
 			return cache.get(type.getJavaType());
 		ReportLookup l = null;
 		String id = JpaIds.singleIdName(type);
-		if (id != null && EntityDiscovery.offeredForLookup(type, options)) {
+		if (id != null && EntityDiscovery.isOffered(type, options)) {
 			Map<String, String> texts = textAttributes(type);
 			List<String> label = labelAttributes(type.getName(), texts);
 			if (!label.isEmpty())

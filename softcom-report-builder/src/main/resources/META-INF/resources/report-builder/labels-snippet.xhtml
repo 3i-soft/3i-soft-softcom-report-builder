@@ -1,0 +1,79 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml" xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
+	xmlns:h="http://xmlns.jcp.org/jsf/html" xmlns:f="http://xmlns.jcp.org/jsf/core" xmlns:p="http://primefaces.org/ui">
+	<!--
+		Names of the tables, fields and values shown in reports. Include it OUTSIDE any h:form:
+		  <ui:include src="/report-builder/labels-snippet.xhtml" />
+		Needs ReportSecurity.canEditLabels(). Saved names are used at once, without a restart.
+	-->
+	<h:outputStylesheet library="report-builder" name="rb-4.css" />
+	<div class="rb-root">
+	<h:form id="rbLabelsForm">
+		<f:event type="preRenderView" listener="#{rbLabels.touch}" />
+		<p:messages id="rbMessages" closable="true" styleClass="rb-messages" />
+		<p:defaultCommand target="rbLabelsFilter" />
+		<h:panelGroup rendered="#{rbLabels.allowed}">
+			<div class="rb-panel">
+				<div class="rb-panel-head">
+					<span class="rb-head-icon"><i class="fa fa-language" /></span>
+					<div class="rb-titles">
+						<div class="rb-panel-title">#{rbbundle['rb.labels.title']}</div>
+						<div class="rb-panel-hint">#{rbbundle['rb.labels.hint']}</div>
+					</div>
+					<div class="rb-end">
+						<span class="rb-chip">#{rbbundle['rb.labels.missing']}: #{rbLabels.missingCount} / #{rbLabels.totalCount}</span>
+					</div>
+				</div>
+				<div class="rb-row rb-plain">
+					<p:inputText value="#{rbLabels.search}" placeholder="#{rbbundle['rb.labels.search']}" styleClass="form-control rb-input" />
+					<p:selectOneMenu value="#{rbLabels.kind}" autoWidth="false" styleClass="rb-w-md">
+						<f:selectItem itemLabel="#{rbbundle['rb.labels.kind.all']}" itemValue="" />
+						<f:selectItems value="#{rbLabels.kindItems}" />
+					</p:selectOneMenu>
+					<p:selectBooleanCheckbox value="#{rbLabels.missingOnly}" itemLabel="#{rbbundle['rb.labels.missingOnly']}" />
+					<p:commandButton id="rbLabelsFilter" value="#{rbbundle['rb.labels.filter']}" icon="fa fa-filter" action="#{rbLabels.applyFilter}"
+						process="@form" update="@form" styleClass="rb-btn" />
+				</div>
+			</div>
+
+			<div class="rb-panel rb-labels">
+				<div class="rb-panel-head">
+					<div class="rb-titles">
+						<span class="rb-chip">#{rbLabels.pageInfo}</span>
+					</div>
+					<div class="rb-end rb-pager">
+						<p:commandButton value="#{rbbundle['rb.previous']}" action="#{rbLabels.previous}" disabled="#{not rbLabels.hasPrevious}"
+							process="@form" update="@form" styleClass="rb-btn" />
+						<p:commandButton value="#{rbbundle['rb.next']}" action="#{rbLabels.next}" disabled="#{not rbLabels.hasNext}"
+							process="@form" update="@form" styleClass="rb-btn" />
+					</div>
+				</div>
+				<p:dataTable value="#{rbLabels.page}" var="r" styleClass="rb-table" emptyMessage="#{rbbundle['rb.labels.none']}">
+					<p:column headerText="#{rbbundle['rb.labels.owner']}">
+						<h:outputText value="#{r.entry.owner}" styleClass="rb-code" />
+						<div class="rb-hint">#{rbLabels.kindLabel(r)}</div>
+					</p:column>
+					<p:column headerText="#{rbbundle['rb.labels.key']}">
+						<h:outputText value="#{r.entry.autoEn}" />
+						<div class="rb-hint rb-code">#{r.entry.key}</div>
+					</p:column>
+					<p:column headerText="#{rbbundle['rb.labels.ar']}">
+						<p:inputText value="#{r.ar}" maxlength="300" placeholder="#{empty r.entry.autoAr ? rbbundle['rb.labels.noArabic'] : r.entry.autoAr}"
+							styleClass="form-control rb-input #{r.missing ? 'rb-missing' : ''}" />
+					</p:column>
+					<p:column headerText="#{rbbundle['rb.labels.en']}">
+						<p:inputText value="#{r.en}" maxlength="300" placeholder="#{r.entry.autoEn}" styleClass="form-control rb-input" />
+					</p:column>
+				</p:dataTable>
+			</div>
+
+			<div class="rb-actionbar">
+				<p:commandButton value="#{rbbundle['rb.save']}" icon="fa fa-save" action="#{rbLabels.save}" process="@form" update="@form"
+					styleClass="btn btn-success" />
+				<span class="rb-spacer" />
+				<p:commandButton value="#{rbbundle['rb.exportExcel']}" icon="fa fa-download" action="#{rbLabels.exportExcel}" ajax="false"
+					styleClass="rb-btn" />
+			</div>
+		</h:panelGroup>
+	</h:form>
+	</div>
+</ui:composition>

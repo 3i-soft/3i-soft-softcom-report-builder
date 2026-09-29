@@ -34,4 +34,9 @@ public interface ReportSecurity {
 	default boolean isAdmin() {
 		return hasPermission(ReportRoles.admin());
 	}
+
+	/** May change the names of tables and fields on the labels page. */
+	default boolean canEditLabels() {
+		return isAdmin() || hasPermission(ReportRoles.labels());
+	}
 }

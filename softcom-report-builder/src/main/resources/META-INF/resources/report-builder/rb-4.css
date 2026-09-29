@@ -286,6 +286,11 @@
 .rb-root .rb-lookup-multi .ui-autocomplete-multiple-container { min-width: 260px; max-width: 520px; }
 .rb-root .rb-lookup .ui-autocomplete-dropdown { width: 30px; }
 
+/* labels page */
+.rb-root .rb-code { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; direction: ltr; unicode-bidi: embed; }
+.rb-root .rb-labels .rb-input { width: 100%; min-width: 180px; }
+.rb-root .rb-input.rb-missing { border-color: #d97706; background: #fffbeb; }
+
 /* subtotal and grand total rows */
 .rb-root .rb-table.ui-datatable tbody tr.rb-row-subtotal td { background: var(--rb-soft-2); font-weight: 700; color: var(--rb-text); }
 .rb-root .rb-table.ui-datatable tbody tr.rb-row-total td {

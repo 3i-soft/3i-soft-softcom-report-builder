@@ -452,8 +452,8 @@ public final class EntityDiscovery {
 		return true;
 	}
 
-	/** Whether an entity may be looked up (a pick list of its records): the same rule as for data sources. */
-	static boolean offeredForLookup(EntityType<?> t, Options options) {
+	/** Whether an entity is offered (as a data source, a pick list, on the labels page). */
+	static boolean isOffered(EntityType<?> t, Options options) {
 		return offered(t, options);
 	}
 

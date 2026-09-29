@@ -62,6 +62,14 @@ public class ReportDefinition implements Serializable {
 	@Column(name = "shared_roles", length = 1000)
 	private String sharedRoles;
 
+	/** Comma separated users (as ReportSecurity.getCurrentUser() gives them) allowed to run a shared report. */
+	@Column(name = "shared_users", length = 2000)
+	private String sharedUsers;
+
+	/** Folder the report is listed under (free text, e.g. "Purchases"); null = no folder. */
+	@Column(name = "folder", length = 200)
+	private String folder;
+
 	@Version
 	@Column(name = "version")
 	private Integer version;
@@ -151,6 +159,31 @@ public class ReportDefinition implements Serializable {
 
 	public void setSharedRoles(String sharedRoles) {
 		this.sharedRoles = sharedRoles;
+	}
+
+	public String getSharedUsers() {
+		return sharedUsers;
+	}
+
+	public void setSharedUsers(String sharedUsers) {
+		this.sharedUsers = sharedUsers;
+	}
+
+	public List<String> getSharedUserList() {
+		List<String> list = new ArrayList<>();
+		if (sharedUsers != null)
+			for (String u : sharedUsers.split(","))
+				if (!u.trim().isEmpty())
+					list.add(u.trim());
+		return list;
+	}
+
+	public String getFolder() {
+		return folder;
+	}
+
+	public void setFolder(String folder) {
+		this.folder = folder;
 	}
 
 	public Integer getVersion() {

@@ -11,6 +11,7 @@ import javax.faces.context.FacesContext;
 import javax.faces.model.SelectItem;
 import javax.faces.model.SelectItemGroup;
 import javax.faces.view.ViewScoped;
+import javax.inject.Inject;
 import javax.inject.Named;
 
 import org.softcom.reportbuilder.engine.ReportException;
@@ -18,6 +19,7 @@ import org.softcom.reportbuilder.engine.SpeedRules;
 import org.softcom.reportbuilder.engine.SpecValidator;
 import org.softcom.reportbuilder.model.ReportDefinition;
 import org.softcom.reportbuilder.service.ReportDefinitionFacade;
+import org.softcom.reportbuilder.service.ReportUsers;
 import org.softcom.reportbuilder.spec.Aggregate;
 import org.softcom.reportbuilder.spec.ColumnSpec;
 import org.softcom.reportbuilder.spec.DatePart;
@@ -44,6 +46,9 @@ public class ReportDesignerBean extends AbstractReportBean {
 	@EJB
 	private ReportDefinitionFacade definitions;
 
+	@Inject
+	private ReportUsers users;
+
 	private Long definitionId;
 	private Integer definitionVersion;
 	private boolean editable = true;
@@ -51,6 +56,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 	private String description;
 	private boolean shared;
 	private String sharedRoles;
+	private List<String> sharedUsers = new ArrayList<>();
+	private String folder;
 	private String dataSourceKey;
 	private List<ColumnSpec> columns = new ArrayList<>();
 	private FilterNode.Logic topLogic = FilterNode.Logic.AND;
@@ -114,6 +121,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 		// a copy of someone else's report starts private
 		shared = editable && d.isShared();
 		sharedRoles = editable ? d.getSharedRoles() : null;
+		sharedUsers = editable ? d.getSharedUserList() : new ArrayList<String>();
+		folder = d.getFolder();
 		dataSourceKey = spec.getDataSource();
 		columns = new ArrayList<>();
 		for (ColumnSpec c : spec.getColumns())
@@ -371,6 +380,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 			input.setDescription(description);
 			input.setShared(shared);
 			input.setSharedRoles(sharedRoles);
+			input.setSharedUsers(sharedUsers == null || sharedUsers.isEmpty() ? null : String.join(",", sharedUsers));
+			input.setFolder(folder);
 			ReportDefinition saved = definitions.save(input, buildSpec());
 			definitionId = saved.getId();
 			definitionVersion = saved.getVersion();
@@ -401,6 +412,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 		description = null;
 		shared = false;
 		sharedRoles = null;
+		sharedUsers = new ArrayList<>();
+		folder = null;
 		dataSourceKey = null;
 		columns = new ArrayList<>();
 		groups = new ArrayList<>();
@@ -541,6 +554,54 @@ public class ReportDesignerBean extends AbstractReportBean {
 
 	public void setSharedRoles(String sharedRoles) {
 		this.sharedRoles = sharedRoles;
+	}
+
+	public List<String> getSharedUsers() {
+		return sharedUsers;
+	}
+
+	public void setSharedUsers(List<String> sharedUsers) {
+		// logins cannot contain the list separator
+		List<String> clean = new ArrayList<>();
+		if (sharedUsers != null)
+			for (String u : sharedUsers)
+				if (u != null && !u.trim().isEmpty() && !u.contains(",") && !clean.contains(u.trim()))
+					clean.add(u.trim());
+		this.sharedUsers = clean;
+	}
+
+	/** p:autoComplete of users to share with: the application's users by name, or the typed login. */
+	public List<String> completeUsers(String query) {
+		if (users.isAvailable())
+			return users.search(query);
+		String q = query == null ? "" : query.trim();
+		return q.isEmpty() || q.contains(",") ? Collections.<String>emptyList() : Collections.singletonList(q);
+	}
+
+	public String userLabel(String user) {
+		return users.isAvailable() ? users.name(user) : user;
+	}
+
+	public String getFolder() {
+		return folder;
+	}
+
+	public void setFolder(String folder) {
+		this.folder = folder;
+	}
+
+	/** p:autoComplete of the existing folders (a new name can be typed). */
+	public List<String> completeFolders(String query) {
+		String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
+		List<String> out = new ArrayList<>();
+		try {
+			for (String f : definitions.folders())
+				if (q.isEmpty() || f.toLowerCase(java.util.Locale.ROOT).contains(q))
+					out.add(f);
+		} catch (RuntimeException e) {
+			// no suggestions
+		}
+		return out;
 	}
 
 	public String getDataSourceKey() {

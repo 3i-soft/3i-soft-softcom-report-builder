@@ -1,6 +1,7 @@
 package org.softcom.reportbuilder.auto;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -13,6 +14,8 @@ import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
 import org.softcom.persistence.IPersistenceHelper;
+import org.softcom.reportbuilder.model.ReportLabel;
+import org.softcom.reportbuilder.service.ReportLabelService;
 import org.softcom.reportbuilder.spi.ReportBuilderConfig;
 import org.softcom.reportbuilder.spi.ReportCodeProvider;
 import org.softcom.reportbuilder.spi.ReportDataSource;
@@ -32,6 +35,9 @@ public class AutoDataSourceProvider implements ReportDataSourceProvider {
 	@EJB
 	private IPersistenceHelper persistenceHelper;
 
+	@EJB
+	private ReportLabelService labelService;
+
 	@Inject
 	@Any
 	private Instance<ReportCodeProvider> codeProviders;
@@ -45,12 +51,30 @@ public class AutoDataSourceProvider implements ReportDataSourceProvider {
 			if (!codeProviders.isUnsatisfied())
 				options.codeLookup(this::codes);
 			List<ReportDataSource> list = EntityDiscovery.discover(persistenceHelper.getEntityManager().getMetamodel(),
-					LabelResolver.fromApplication(), options);
+					withSavedLabels(LabelResolver.fromApplication()), options);
 			LOG.info("Report builder: " + list.size() + " automatic data sources");
 			return list;
 		} catch (RuntimeException e) {
 			LOG.log(Level.WARNING, "Report builder: automatic data sources are not available", e);
 			return Collections.emptyList();
+		}
+	}
+
+	/** The labels entered on the labels page first; without the rb_label table (script not run yet), none. */
+	private LabelResolver withSavedLabels(LabelResolver labels) {
+		try {
+			Map<String, String> ar = new HashMap<>();
+			Map<String, String> en = new HashMap<>();
+			for (ReportLabel l : labelService.findAll().values()) {
+				if (l.getLabelAr() != null)
+					ar.put(l.getKey(), l.getLabelAr());
+				if (l.getLabelEn() != null)
+					en.put(l.getKey(), l.getLabelEn());
+			}
+			return labels.withSaved(ar, en);
+		} catch (RuntimeException e) {
+			LOG.log(Level.INFO, "Report builder: no saved labels (has the rb_label table been created?)", e);
+			return labels;
 		}
 	}
 

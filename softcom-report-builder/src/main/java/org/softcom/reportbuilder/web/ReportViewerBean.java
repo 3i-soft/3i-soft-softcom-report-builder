@@ -47,10 +47,26 @@ public class ReportViewerBean extends AbstractReportBean {
 			return;
 		}
 		try {
+			// reports without a folder first, then one group per folder
+			java.util.Map<String, List<SelectItem>> folders = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 			for (ReportDefinition d : definitions.findVisible()) {
 				ReportDataSource ds = catalog.get(d.getDataSourceKey());
 				String group = ds == null ? "" : " - " + ds.getLabel(getLocale());
-				reportItems.add(new SelectItem(d.getId(), d.getName() + group));
+				SelectItem item = new SelectItem(d.getId(), d.getName() + group);
+				String folder = d.getFolder() == null ? "" : d.getFolder().trim();
+				if (folder.isEmpty()) {
+					reportItems.add(item);
+				} else {
+					List<SelectItem> g = folders.get(folder);
+					if (g == null)
+						folders.put(folder, g = new ArrayList<>());
+					g.add(item);
+				}
+			}
+			for (java.util.Map.Entry<String, List<SelectItem>> f : folders.entrySet()) {
+				javax.faces.model.SelectItemGroup g = new javax.faces.model.SelectItemGroup(f.getKey());
+				g.setSelectItems(f.getValue().toArray(new SelectItem[f.getValue().size()]));
+				reportItems.add(g);
 			}
 		} catch (RuntimeException e) {
 			ReportUi.error(e, null);

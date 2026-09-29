@@ -8,9 +8,11 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Set;
@@ -29,9 +31,11 @@ import org.w3c.dom.NodeList;
 /**
  * Display names of discovered entities and fields, found without any setup:
  * <ol>
+ * <li>the labels entered on the labels page ({@link #withSaved});</li>
  * <li>the application's optional {@code rblabels} bundle (rblabels_ar /
  * rblabels_en .properties), keys {@code Entity}, {@code Entity.attribute},
- * {@code attribute} or {@code EnumType.CONSTANT};</li>
+ * {@code DeclaringClass.attribute}, {@code attribute} or
+ * {@code EnumType.CONSTANT};</li>
  * <li>the labels the entity's author already wrote in 3i-soft annotations:
  * {@code @EntityInfo(label)} on the class, {@code @FieldInfo(label)} and
  * {@code @FieldViewConfiguration(displayName)} on the attribute (found by
@@ -57,6 +61,9 @@ public class LabelResolver {
 	private final List<ResourceBundle> overrides;
 	private final List<ResourceBundle> hostBundles;
 	private final List<ResourceBundle> defaults;
+	/** Labels entered on the labels page (key -&gt; text), used first and in whatever letters they are written. */
+	private Map<String, String> savedAr = Collections.emptyMap();
+	private Map<String, String> savedEn = Collections.emptyMap();
 
 	/**
 	 * @param overrides   rblabels bundles (any language)
@@ -67,6 +74,40 @@ public class LabelResolver {
 		this.overrides = nonNull(overrides);
 		this.hostBundles = nonNull(hostBundles);
 		this.defaults = nonNull(defaults);
+	}
+
+	/** The same resolver with the labels entered on the labels page first (see {@code ReportLabel}). */
+	public LabelResolver withSaved(Map<String, String> ar, Map<String, String> en) {
+		LabelResolver r = new LabelResolver(overrides, hostBundles, defaults);
+		r.savedAr = ar == null ? Collections.<String, String>emptyMap() : new HashMap<>(ar);
+		r.savedEn = en == null ? Collections.<String, String>emptyMap() : new HashMap<>(en);
+		return r;
+	}
+
+	/**
+	 * The key of an attribute on the labels page: its declaring class and name
+	 * ({@code MainEntity.creationDate}), so a field inherited by many tables
+	 * is named once.
+	 */
+	public static String attributeKey(String entity, String attribute, AnnotatedElement member) {
+		String declaring = declaringClass(member);
+		return (declaring != null ? declaring : entity) + "." + attribute;
+	}
+
+	private static String declaringClass(AnnotatedElement member) {
+		return member instanceof java.lang.reflect.Member ? ((java.lang.reflect.Member) member).getDeclaringClass().getSimpleName()
+				: null;
+	}
+
+	private static String saved(Map<String, String> saved, String... keys) {
+		if (saved.isEmpty())
+			return null;
+		for (String k : keys) {
+			String v = k == null ? null : saved.get(k);
+			if (v != null && !v.trim().isEmpty())
+				return v.trim();
+		}
+		return null;
 	}
 
 	/** Labels from the running application: its rblabels bundle and the bundles its faces-config files declare. */
@@ -96,7 +137,9 @@ public class LabelResolver {
 
 	/** @param type the entity class, whose {@code @EntityInfo(label)} is used when present */
 	public String entityAr(String entity, Class<?> type) {
-		String s = find(overrides, true, entity);
+		String s = saved(savedAr, entity);
+		if (s == null)
+			s = find(overrides, true, entity);
 		if (s == null)
 			s = annotationLabel(type, ENTITY_LABELS, true);
 		return s != null ? s : find(hostBundles, true, snake(entity), entity.toLowerCase(Locale.ROOT), entity, decapitalize(entity));
@@ -107,7 +150,9 @@ public class LabelResolver {
 	}
 
 	public String entityEn(String entity, Class<?> type) {
-		String s = find(overrides, false, entity);
+		String s = saved(savedEn, entity);
+		if (s == null)
+			s = find(overrides, false, entity);
 		if (s == null)
 			s = annotationLabel(type, ENTITY_LABELS, false);
 		return s != null ? s : humanize(entity);
@@ -120,7 +165,10 @@ public class LabelResolver {
 
 	/** @param member the attribute's field or getter, whose label annotations are used when present */
 	public String attributeAr(String entity, String attribute, AnnotatedElement member) {
-		String s = find(overrides, true, entity + "." + attribute, attribute);
+		String declared = attributeKey(entity, attribute, member);
+		String s = saved(savedAr, entity + "." + attribute, declared, attribute);
+		if (s == null)
+			s = find(overrides, true, entity + "." + attribute, declared, attribute);
 		if (s == null)
 			s = annotationLabel(member, FIELD_LABELS, true);
 		if (s == null)
@@ -133,7 +181,10 @@ public class LabelResolver {
 	}
 
 	public String attributeEn(String entity, String attribute, AnnotatedElement member) {
-		String s = find(overrides, false, entity + "." + attribute, attribute);
+		String declared = attributeKey(entity, attribute, member);
+		String s = saved(savedEn, entity + "." + attribute, declared, attribute);
+		if (s == null)
+			s = find(overrides, false, entity + "." + attribute, declared, attribute);
 		if (s == null)
 			s = annotationLabel(member, FIELD_LABELS, false);
 		if (s == null)
@@ -172,12 +223,16 @@ public class LabelResolver {
 	}
 
 	public String enumAr(Class<?> enumType, String constant) {
-		String s = find(overrides, true, enumType.getSimpleName() + "." + constant);
+		String s = saved(savedAr, enumType.getSimpleName() + "." + constant);
+		if (s == null)
+			s = find(overrides, true, enumType.getSimpleName() + "." + constant);
 		return s != null ? s : find(hostBundles, true, constant, constant.toLowerCase(Locale.ROOT));
 	}
 
 	public String enumEn(Class<?> enumType, String constant) {
-		String s = find(overrides, false, enumType.getSimpleName() + "." + constant);
+		String s = saved(savedEn, enumType.getSimpleName() + "." + constant);
+		if (s == null)
+			s = find(overrides, false, enumType.getSimpleName() + "." + constant);
 		return s != null ? s : humanize(constant);
 	}
 

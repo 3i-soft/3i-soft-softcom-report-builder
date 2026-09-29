@@ -19,8 +19,8 @@ import org.softcom.reportbuilder.spi.ReportDataSource;
 
 /**
  * Saved reports with their visibility rules: the owner and admins see a report;
- * others see it only when it is shared (optionally restricted to roles) and they
- * may use its data source.
+ * others see it only when it is shared (with everyone, or with listed users and
+ * roles) and they may use its data source.
  */
 @Stateless
 public class ReportDefinitionFacade {
@@ -67,13 +67,27 @@ public class ReportDefinitionFacade {
 			return true;
 		if (!d.isShared())
 			return false;
+		// shared with everyone, or with the listed users and the holders of the listed roles
 		List<String> roles = d.getSharedRoleList();
-		if (roles.isEmpty())
+		List<String> users = d.getSharedUserList();
+		if (roles.isEmpty() && users.isEmpty())
+			return true;
+		String user = security.getCurrentUser();
+		if (user != null && users.contains(user))
 			return true;
 		for (String r : roles)
 			if (security.hasPermission(r))
 				return true;
 		return false;
+	}
+
+	/** Folders of the reports the current user sees, sorted. */
+	public List<String> folders() {
+		java.util.TreeSet<String> folders = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+		for (ReportDefinition d : findVisible())
+			if (d.getFolder() != null && !d.getFolder().trim().isEmpty())
+				folders.add(d.getFolder().trim());
+		return new ArrayList<>(folders);
 	}
 
 	public boolean canEdit(ReportDefinition d) {
@@ -97,6 +111,8 @@ public class ReportDefinitionFacade {
 		checkLength(input.getName().trim(), 200);
 		checkLength(input.getDescription(), 1000);
 		checkLength(input.getSharedRoles(), 1000);
+		checkLength(input.getSharedUsers(), 2000);
+		checkLength(input.getFolder() == null ? null : input.getFolder().trim(), 200);
 		ReportDataSource ds = catalog.get(spec.getDataSource());
 		if (!ReportCatalog.isAllowed(ds, security))
 			throw new ReportException("rb.error.unknownDataSource", spec.getDataSource());
@@ -127,6 +143,8 @@ public class ReportDefinitionFacade {
 		d.setDescription(input.getDescription());
 		d.setShared(input.isShared());
 		d.setSharedRoles(input.getSharedRoles());
+		d.setSharedUsers(input.getSharedUsers());
+		d.setFolder(input.getFolder() == null || input.getFolder().trim().isEmpty() ? null : input.getFolder().trim());
 		d.setDataSourceKey(ds.getKey());
 		d.setDefinition(json);
 		d.setUpdatedBy(user);

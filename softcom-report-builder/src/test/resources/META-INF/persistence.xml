@@ -15,6 +15,7 @@
 		<class>org.softcom.reportbuilder.testmodel.TSupplier</class>
 		<class>org.softcom.reportbuilder.model.ReportDefinition</class>
 		<class>org.softcom.reportbuilder.model.ReportRunLog</class>
+		<class>org.softcom.reportbuilder.model.ReportLabel</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
 			<property name="javax.persistence.jdbc.driver" value="org.h2.Driver" />

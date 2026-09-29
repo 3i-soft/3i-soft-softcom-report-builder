@@ -40,9 +40,14 @@
 							<p:ajax listener="#{rbDesigner.onDataSourceChange}" process="@form" update="@form" />
 						</p:selectOneMenu>
 					</div>
-					<div class="rb-fieldset rb-full">
+					<div class="rb-fieldset rb-grow">
 						<h:outputLabel for="rbDescription" value="#{rbbundle['rb.description']}" />
 						<p:inputText id="rbDescription" value="#{rbDesigner.description}" maxlength="1000" styleClass="form-control rb-full" />
+					</div>
+					<div class="rb-fieldset">
+						<h:outputLabel for="rbFolder" value="#{rbbundle['rb.folder']}" />
+						<p:autoComplete id="rbFolder" value="#{rbDesigner.folder}" completeMethod="#{rbDesigner.completeFolders}" dropdown="true"
+							maxlength="200" placeholder="#{rbbundle['rb.folderHint']}" styleClass="rb-lookup" />
 					</div>
 				</div>
 				<h:panelGroup layout="block" styleClass="rb-note" rendered="#{rbDesigner.requiredFilterNote ne null}">
@@ -228,6 +233,13 @@
 								<p:ajax process="@form" update="@(.rb-sharing)" />
 							</p:selectBooleanCheckbox>
 						</div>
+						<h:panelGroup layout="block" styleClass="rb-fieldset" rendered="#{rbDesigner.shared}">
+							<h:outputLabel for="rbSharedUsers" value="#{rbbundle['rb.sharedUsers']}" />
+							<p:autoComplete id="rbSharedUsers" value="#{rbDesigner.sharedUsers}" multiple="true" completeMethod="#{rbDesigner.completeUsers}"
+								var="u" itemValue="#{u}" itemLabel="#{rbDesigner.userLabel(u)}" queryDelay="300" scrollHeight="260"
+								styleClass="rb-lookup rb-lookup-multi" />
+							<span class="rb-hint">#{rbbundle['rb.sharedUsersHint']}</span>
+						</h:panelGroup>
 						<h:panelGroup layout="block" styleClass="rb-fieldset" rendered="#{rbDesigner.shared}">
 							<h:outputLabel for="rbSharedRoles" value="#{rbbundle['rb.sharedRoles']}" />
 							<p:inputText id="rbSharedRoles" value="#{rbDesigner.sharedRoles}" maxlength="1000" styleClass="form-control rb-full" />

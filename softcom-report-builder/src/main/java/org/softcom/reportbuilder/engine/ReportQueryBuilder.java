@@ -99,6 +99,9 @@ public final class ReportQueryBuilder {
 			selections.add(e);
 			columnExpressions.add(e);
 			FieldType type = SpecValidator.resultType(c, f);
+			// a column of ids shown by name (warehouse_id) reads as text
+			if (agg == Aggregate.NONE && f != null && f.hasLookup() && f.getLookup().isNamesInResults())
+				type = FieldType.STRING;
 			columns.add(new ResultColumn(i, c.getField(), agg, type, c.getLabel(),
 					f == null ? "عدد السجلات" : f.getLabelAr(),
 					f == null ? "Row count" : f.getLabelEn(), f == null || !keepsFormat(agg) ? null : f.getFormat(),

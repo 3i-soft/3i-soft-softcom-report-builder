@@ -6,7 +6,9 @@ import java.text.DecimalFormatSymbols;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
 
+import org.softcom.reportbuilder.engine.LookupQueries;
 import org.softcom.reportbuilder.engine.ResultColumn;
 import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportDataSource;
@@ -16,6 +18,16 @@ import org.softcom.reportbuilder.spi.ReportField;
 public final class ReportFormatter {
 
 	private ReportFormatter() {
+	}
+
+	/** Like {@link #format(Object, ResultColumn, ReportDataSource, Locale)}; an id found in {@code names} shows its name. */
+	public static String format(Object value, ResultColumn column, ReportDataSource ds, Locale locale, Map<String, String> names) {
+		if (value != null && names != null) {
+			String name = names.get(LookupQueries.key(value));
+			if (name != null)
+				return name;
+		}
+		return format(value, column, ds, locale);
 	}
 
 	public static String format(Object value, ResultColumn column, ReportDataSource ds, Locale locale) {

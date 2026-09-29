@@ -81,7 +81,7 @@ public class ReportViewerBean extends AbstractReportBean {
 			dataSourceKey = spec.getDataSource();
 			for (FilterNode r : spec.getParameters()) {
 				ReportField f = field(r.getField());
-				parameters.add(RuleEditor.from(r, f == null ? null : f.getType(), f != null && f.hasChoices()));
+				parameters.add(RuleEditor.from(r, f == null ? null : f.getType(), f != null && (f.hasChoices() || f.hasLookup())));
 			}
 		} catch (RuntimeException e) {
 			selectedId = null;

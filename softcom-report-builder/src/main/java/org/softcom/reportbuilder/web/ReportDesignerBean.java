@@ -100,7 +100,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 					if (r.isGroup())
 						throw new ReportException("rb.error.tooComplexForDesigner");
 					ReportField f = ds == null || r.getField() == null ? null : ds.getField(r.getField());
-					g.getRules().add(RuleEditor.from(r, f == null ? null : f.getType(), f != null && f.hasChoices()));
+					g.getRules().add(RuleEditor.from(r, f == null ? null : f.getType(), f != null && (f.hasChoices() || f.hasLookup())));
 					maxSeq = Math.max(maxSeq, numericSuffix(r.getId()));
 				}
 				loadedGroups.add(g);

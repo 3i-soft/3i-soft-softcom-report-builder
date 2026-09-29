@@ -12,6 +12,8 @@ public class TSupplier extends TBaseEntity {
 	/** a code of the application's codes service: reports show its name */
 	@Code(codeKind = "CITY")
 	private String cityCode;
+	/** a warehouse kept as a plain number named after the entity (TWarehouse), like generalWarehouse's warehouse_id */
+	private Long mainTWarehouseId;
 
 	public TSupplier() {
 	}

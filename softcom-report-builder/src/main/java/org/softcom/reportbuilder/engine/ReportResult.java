@@ -2,7 +2,9 @@ package org.softcom.reportbuilder.engine;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One page of a report result. There is deliberately no row count (it costs a
@@ -20,6 +22,8 @@ public class ReportResult implements Serializable {
 	private final long durationMs;
 	private final List<ResultRow> displayRows;
 	private final ResultRow totals;
+	/** Column index -&gt; id key -&gt; name, for columns of ids shown by name (see ReportLookup). */
+	private Map<Integer, Map<String, String>> names = Collections.emptyMap();
 
 	public ReportResult(List<ResultColumn> columns, List<Object[]> rows, int first, boolean hasMore, long durationMs) {
 		this(columns, rows, null, null, first, hasMore, durationMs);
@@ -62,6 +66,15 @@ public class ReportResult implements Serializable {
 	/** The grand total row (first page only), or null. */
 	public ResultRow getTotals() {
 		return totals;
+	}
+
+	/** Names of the ids of a column (key: {@code LookupQueries.key(value)}), or null. */
+	public Map<String, String> getNames(int column) {
+		return names.get(column);
+	}
+
+	void setNames(Map<Integer, Map<String, String>> names) {
+		this.names = names == null ? Collections.<Integer, Map<String, String>>emptyMap() : names;
 	}
 
 	public int getFirst() {

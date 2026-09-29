@@ -20,6 +20,18 @@
 		label="#{rbbundle['rb.choose']}" updateLabel="true" styleClass="rb-w-lg">
 		<f:selectItems value="#{rbBean.choiceItems(rule)}" />
 	</p:selectCheckboxMenu>
+	<!-- records searched by name or code (the ids are stored); the dropdown button lists the first ones -->
+	<p:autoComplete value="#{rule.value}" rendered="#{kind eq 'lookup'}" completeMethod="#{rbBean.completeLookup}" var="id" itemValue="#{id}"
+		itemLabel="#{rbBean.lookupLabel(rule.field, id)}" dropdown="true" forceSelection="true" queryDelay="300" scrollHeight="260"
+		placeholder="#{rbbundle['rb.lookupHint']}" emptyMessage="#{rbbundle['rb.lookupNone']}" styleClass="rb-lookup" label="#{valueLabel}">
+		<f:attribute name="rbField" value="#{rule.field}" />
+	</p:autoComplete>
+	<p:autoComplete value="#{rule.selected}" rendered="#{kind eq 'lookupList'}" multiple="true" completeMethod="#{rbBean.completeLookup}"
+		var="id" itemValue="#{id}" itemLabel="#{rbBean.lookupLabel(rule.field, id)}" dropdown="true" forceSelection="true" queryDelay="300"
+		scrollHeight="260" placeholder="#{rbbundle['rb.lookupHint']}" emptyMessage="#{rbbundle['rb.lookupNone']}"
+		styleClass="rb-lookup rb-lookup-multi" label="#{valueLabel}">
+		<f:attribute name="rbField" value="#{rule.field}" />
+	</p:autoComplete>
 	<p:inputText value="#{rule.listText}" rendered="#{kind eq 'list'}" styleClass="form-control rb-input" placeholder="#{rbbundle['rb.listHint']}"
 		label="#{valueLabel}" />
 	<h:panelGroup rendered="#{rbBean.hasSecondValue(rule)}">

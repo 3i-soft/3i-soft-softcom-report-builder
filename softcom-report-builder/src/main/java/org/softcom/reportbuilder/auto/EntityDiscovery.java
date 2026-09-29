@@ -46,6 +46,7 @@ import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportBuilderConfig;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 import org.softcom.reportbuilder.spi.ReportField;
+import org.softcom.reportbuilder.spi.ReportLookup;
 
 /**
  * Turns every JPA entity of the application into a data source, so a project
@@ -154,17 +155,18 @@ public final class EntityDiscovery {
 		List<EntityType<?>> types = new ArrayList<>(metamodel.getEntities());
 		types.sort(Comparator.comparing(EntityType::getName));
 		List<ReportDataSource> out = new ArrayList<>();
+		Lookups lookups = new Lookups(metamodel, options);
 		for (EntityType<?> t : types) {
 			if (!offered(t, options) || idName(t) == null)
 				continue;
 			try {
-				ReportDataSource ds = entitySource(t, labels, options);
+				ReportDataSource ds = entitySource(t, labels, options, lookups);
 				if (ds != null)
 					out.add(ds);
 				for (Attribute<?, ?> a : sorted(t.getAttributes())) {
 					if (a.getPersistentAttributeType() != Attribute.PersistentAttributeType.ONE_TO_MANY)
 						continue;
-					ReportDataSource g = collectionSource(t, (PluralAttribute<?, ?, ?>) a, labels, options);
+					ReportDataSource g = collectionSource(t, (PluralAttribute<?, ?, ?>) a, labels, options, lookups);
 					if (g != null)
 						out.add(g);
 				}
@@ -175,10 +177,10 @@ public final class EntityDiscovery {
 		return out;
 	}
 
-	private static ReportDataSource entitySource(EntityType<?> t, LabelResolver labels, Options options) {
+	private static ReportDataSource entitySource(EntityType<?> t, LabelResolver labels, Options options, Lookups lookups) {
 		ReportDataSource ds = new ReportDataSource(KEY_PREFIX + t.getName(), t.getJavaType())
 				.labels(labels.entityAr(t.getName(), t.getJavaType()), labels.entityEn(t.getName(), t.getJavaType()));
-		new Builder(ds, labels, options, null, null, options.maxFields).addTree(t, "", 0, null, null);
+		new Builder(ds, labels, options, lookups, null, null, options.maxFields).addTree(t, "", 0, null, null);
 		// conditions through the entity's collections: "invoices having a line whose item is ..."
 		int budget = options.maxConditionFields;
 		if (options.depth >= 1) {
@@ -195,7 +197,7 @@ public final class EntityDiscovery {
 				String relAr = labels.attributeAr(t.getName(), name, member(a));
 				String relEn = labels.attributeEn(t.getName(), name, member(a));
 				ds.groupLabels(name, relAr, relEn);
-				Builder c = new Builder(ds, labels, options, null, name, budget);
+				Builder c = new Builder(ds, labels, options, lookups, null, name, budget);
 				c.addTree((EntityType<?>) elementType, name + ".", 1, relAr, relEn);
 				budget -= c.added;
 			}
@@ -205,7 +207,7 @@ public final class EntityDiscovery {
 
 	/** One row per element of a one-to-many collection the element cannot navigate back from. */
 	private static ReportDataSource collectionSource(EntityType<?> owner, PluralAttribute<?, ?, ?> c, LabelResolver labels,
-			Options options) {
+			Options options, Lookups lookups) {
 		if (!(c.getElementType() instanceof EntityType))
 			return null;
 		EntityType<?> element = (EntityType<?>) c.getElementType();
@@ -223,9 +225,10 @@ public final class EntityDiscovery {
 				.labels(combineAr(ownerAr, ownerEn, relAr, relEn), ownerEn + " - " + relEn)
 				.join(name, JoinType.INNER).grain(name, elementId).joinLabels(name, relAr, relEn);
 		// the element's own fields (the lines, their item...) first: they are what a row of this data source is
-		Builder lines = new Builder(ds, labels, options, name + ".", null, options.maxFields);
+		Builder lines = new Builder(ds, labels, options, lookups, name + ".", null, options.maxFields);
 		lines.addTree(element, name + ".", 1, relAr, relEn);
-		new Builder(ds, labels, options, name + ".", null, options.maxFields - lines.added).addTree(owner, "", 0, null, null);
+		new Builder(ds, labels, options, lookups, name + ".", null, options.maxFields - lines.added).addTree(owner, "", 0, null,
+				null);
 		return finish(ds, options);
 	}
 
@@ -245,6 +248,7 @@ public final class EntityDiscovery {
 		private final ReportDataSource ds;
 		private final LabelResolver labels;
 		private final Options options;
+		private final Lookups lookups;
 		/** In a collection data source: prefix of the element's fields; other numbers repeat per element. */
 		private final String elementPrefix;
 		/** Condition-only fields reached through this collection of the root (no declared joins), or null. */
@@ -252,11 +256,12 @@ public final class EntityDiscovery {
 		private final int budget;
 		int added;
 
-		Builder(ReportDataSource ds, LabelResolver labels, Options options, String elementPrefix, String collection,
-				int budget) {
+		Builder(ReportDataSource ds, LabelResolver labels, Options options, Lookups lookups, String elementPrefix,
+				String collection, int budget) {
 			this.ds = ds;
 			this.labels = labels;
 			this.options = options;
+			this.lookups = lookups;
 			this.elementPrefix = elementPrefix;
 			this.collection = collection;
 			this.budget = budget;
@@ -311,7 +316,7 @@ public final class EntityDiscovery {
 			String fullEn = level.labelEn == null ? en : level.labelEn + " - " + en;
 			switch (a.getPersistentAttributeType()) {
 			case BASIC:
-				addBasic(a, level.prefix + name, fullAr, fullEn);
+				addBasic(a, level, level.prefix + name, fullAr, fullEn);
 				break;
 			case MANY_TO_ONE:
 			case ONE_TO_ONE:
@@ -334,7 +339,7 @@ public final class EntityDiscovery {
 			}
 		}
 
-		private void addBasic(Attribute<?, ?> a, String path, String labelAr, String labelEn) {
+		private void addBasic(Attribute<?, ?> a, Step level, String path, String labelAr, String labelEn) {
 			FieldType type = fieldType(a);
 			if (type == null)
 				return;
@@ -346,7 +351,15 @@ public final class EntityDiscovery {
 					: path.startsWith(elementPrefix) && path.indexOf('.', elementPrefix.length()) < 0;
 			if (id || !own)
 				f.aggregatable(false);
-			if (id && type.isNumeric())
+			// the id of a related record (supplier.id) or a number named after an entity (warehouse_id): a pick list
+			ReportLookup lookup = null;
+			if (id && level.depth >= 1 && level.type instanceof EntityType)
+				lookup = lookups.of((EntityType<?>) level.type);
+			else if (!id)
+				lookup = lookups.forColumn(a.getName(), a.getJavaType());
+			if (lookup != null)
+				f.lookup(lookup).aggregatable(false);
+			if ((id || lookup != null) && type.isNumeric())
 				f.format("0"); // an id reads 12345, not 12,345
 			if (type == FieldType.ENUM)
 				f.enumValues(enumLabels(a.getJavaType(), labels));
@@ -437,6 +450,16 @@ public final class EntityDiscovery {
 			if (type instanceof EntityType && options.excluded.contains(((EntityType<?>) type).getName().toLowerCase(Locale.ROOT)))
 				return false;
 		return true;
+	}
+
+	/** Whether an entity may be looked up (a pick list of its records): the same rule as for data sources. */
+	static boolean offeredForLookup(EntityType<?> t, Options options) {
+		return offered(t, options);
+	}
+
+	/** The code kind of an attribute marked {@code @Code(codeKind = ...)}, or null. */
+	static String codeKindOf(Attribute<?, ?> a) {
+		return codeKind(member(a));
 	}
 
 	/** The kind of a {@code @Code(codeKind = ...)} annotation (found by name), or null. */

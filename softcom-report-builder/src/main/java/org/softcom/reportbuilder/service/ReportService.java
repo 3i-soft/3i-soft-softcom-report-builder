@@ -2,6 +2,8 @@ package org.softcom.reportbuilder.service;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +21,7 @@ import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
 import org.softcom.persistence.IPersistenceHelper;
+import org.softcom.reportbuilder.engine.LookupQueries;
 import org.softcom.reportbuilder.engine.ReportException;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ReportResult;
@@ -30,6 +33,7 @@ import org.softcom.reportbuilder.model.ReportRunLog;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spi.ReportAttributesProvider;
 import org.softcom.reportbuilder.spi.ReportDataSource;
+import org.softcom.reportbuilder.spi.ReportField;
 import org.softcom.reportbuilder.spi.ReportRowFilter;
 import org.softcom.reportbuilder.spi.RowRestrictions;
 
@@ -164,6 +168,39 @@ public class ReportService {
 			log(kind, definitionId, ds.getKey(), started, System.currentTimeMillis() - t0,
 					result == null ? 0 : result.getRows().size(), error);
 		}
+	}
+
+	/** Seconds a pick-list search may take: it runs while the user types. */
+	private static final int LOOKUP_TIMEOUT_SECONDS = 5;
+
+	/**
+	 * Records for the pick list of an id field (e.g. suppliers whose name
+	 * contains {@code text}), limited by the application's row restrictions.
+	 */
+	public List<LookupQueries.Item> lookup(String dataSourceKey, String fieldPath, String text) {
+		ReportField f = lookupField(dataSourceKey, fieldPath);
+		if (f == null)
+			return Collections.emptyList();
+		return LookupQueries.search(persistenceHelper.getEntityManager(), f.getLookup(), text, LookupQueries.MAX_RESULTS,
+				context(), LOOKUP_TIMEOUT_SECONDS);
+	}
+
+	/** Names of ids chosen in a condition (to show a saved report's choices). */
+	public Map<String, String> lookupNames(String dataSourceKey, String fieldPath, Collection<String> ids) {
+		ReportField f = lookupField(dataSourceKey, fieldPath);
+		if (f == null || ids == null || ids.isEmpty())
+			return Collections.emptyMap();
+		return LookupQueries.names(persistenceHelper.getEntityManager(), f.getLookup(), ids, LOOKUP_TIMEOUT_SECONDS);
+	}
+
+	private ReportField lookupField(String dataSourceKey, String fieldPath) {
+		if (!security.canRun() || dataSourceKey == null || fieldPath == null)
+			return null;
+		ReportDataSource ds = catalog.get(dataSourceKey);
+		if (!ReportCatalog.isAllowed(ds, security))
+			return null;
+		ReportField f = ds.getField(fieldPath);
+		return f == null || !f.hasLookup() || !f.isFilterable() ? null : f;
 	}
 
 	/** Size and fast fields of a data source the user may use (for the designer's hints). */

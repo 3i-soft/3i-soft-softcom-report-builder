@@ -280,6 +280,12 @@
 .rb-root .rb-table.ui-datatable tbody tr:last-child td { border-bottom: 0 !important; }
 .rb-root .rb-table.ui-datatable .rb-num { text-align: right; direction: ltr; font-variant-numeric: tabular-nums; font-weight: 600; }
 [dir="rtl"] .rb-root .rb-table.ui-datatable .rb-num { text-align: left; }
+/* pick lists (records searched by name) */
+.rb-root .rb-lookup.ui-autocomplete { display: inline-flex; align-items: stretch; }
+.rb-root .rb-lookup .ui-autocomplete-input { width: 240px; max-width: 100%; }
+.rb-root .rb-lookup-multi .ui-autocomplete-multiple-container { min-width: 260px; max-width: 520px; }
+.rb-root .rb-lookup .ui-autocomplete-dropdown { width: 30px; }
+
 /* subtotal and grand total rows */
 .rb-root .rb-table.ui-datatable tbody tr.rb-row-subtotal td { background: var(--rb-soft-2); font-weight: 700; color: var(--rb-text); }
 .rb-root .rb-table.ui-datatable tbody tr.rb-row-total td {

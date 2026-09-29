@@ -34,6 +34,7 @@ public class ReportField implements Serializable {
 	private String format;
 	private Map<String, String> enumValues = Collections.emptyMap();
 	private ChoiceSource choiceSource;
+	private ReportLookup lookup;
 	private String collection;
 
 	public ReportField(String path, FieldType type) {
@@ -162,6 +163,20 @@ public class ReportField implements Serializable {
 				return m;
 		}
 		return Collections.emptyMap();
+	}
+
+	/** The records the field's values point to (a searchable pick list in conditions). */
+	public ReportField lookup(ReportLookup lookup) {
+		this.lookup = lookup;
+		return this;
+	}
+
+	public ReportLookup getLookup() {
+		return lookup;
+	}
+
+	public boolean hasLookup() {
+		return lookup != null;
 	}
 
 	public boolean hasChoices() {

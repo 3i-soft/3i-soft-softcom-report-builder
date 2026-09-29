@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
@@ -19,6 +20,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.softcom.reportbuilder.engine.LookupQueries;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ResultColumn;
 import org.softcom.reportbuilder.spec.DatePart;
@@ -45,6 +47,7 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 	private final List<CellStyle> boldStyles = new ArrayList<>();
 	private CellStyle boldText;
 	private List<ResultColumn> columns;
+	private Map<Integer, Map<String, String>> names = java.util.Collections.emptyMap();
 	private int nextRow;
 	private boolean truncated;
 
@@ -110,6 +113,11 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 	}
 
 	@Override
+	public void names(Map<Integer, Map<String, String>> chunkNames) {
+		this.names = chunkNames == null ? java.util.Collections.<Integer, Map<String, String>>emptyMap() : chunkNames;
+	}
+
+	@Override
 	public void subtotal(Object[] values, int labelColumn) {
 		write(values, labelColumn, "rb.subtotal", boldStyles);
 	}
@@ -132,7 +140,13 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 			if (v == null)
 				continue;
 			Cell cell = row.createCell(c.getIndex());
-			if (v instanceof Number) {
+			Map<String, String> columnNames = names.get(c.getIndex());
+			String name = columnNames == null ? null : columnNames.get(LookupQueries.key(v));
+			if (name != null) {
+				cell.setCellValue(name);
+				if (cellStyles == boldStyles)
+					cell.setCellStyle(boldText);
+			} else if (v instanceof Number) {
 				cell.setCellValue(v instanceof BigDecimal ? ((BigDecimal) v).doubleValue() : ((Number) v).doubleValue());
 				cell.setCellStyle(cellStyles.get(c.getIndex()));
 			} else if (v instanceof Date) {

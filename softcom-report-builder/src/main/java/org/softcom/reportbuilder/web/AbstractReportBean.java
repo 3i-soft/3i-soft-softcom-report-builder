@@ -3,16 +3,20 @@ package org.softcom.reportbuilder.web;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import javax.ejb.EJB;
+import javax.faces.component.UIComponent;
+import javax.faces.context.FacesContext;
 import javax.faces.model.SelectItem;
 import javax.faces.model.SelectItemGroup;
 import javax.inject.Inject;
 
+import org.softcom.reportbuilder.engine.LookupQueries;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ReportResult;
 import org.softcom.reportbuilder.engine.ResultColumn;
@@ -121,9 +125,8 @@ public abstract class AbstractReportBean implements Serializable {
 		if (!(row instanceof Object[]))
 			return "";
 		Object[] values = (Object[]) row;
-		return column.getIndex() < values.length
-				? ReportFormatter.format(values[column.getIndex()], column, getDataSource(), getLocale())
-				: "";
+		return column.getIndex() < values.length ? ReportFormatter.format(values[column.getIndex()], column, getDataSource(),
+				getLocale(), result == null ? null : result.getNames(column.getIndex())) : "";
 	}
 
 	public String columnLabel(ResultColumn column) {
@@ -175,6 +178,8 @@ public abstract class AbstractReportBean implements Serializable {
 			if (!filterableOnly && f.isViaCollection())
 				continue;
 			String label = f.getLabel(getLocale());
+			if (filterableOnly && f.hasLookup())
+				label = label + " " + ReportUi.text("rb.lookupMark");
 			SelectItem item = new SelectItem(f.getPath(), sp.isFast(f.getPath()) ? label + " " + FAST_MARK : label);
 			String join = f.isViaCollection() ? f.getPath().substring(0, f.getPath().lastIndexOf('.')) : f.getJoinPath();
 			String groupLabel = join == null || !ds.isAutomatic() ? null : ds.getJoinLabel(join, getLocale());
@@ -256,9 +261,67 @@ public abstract class AbstractReportBean implements Serializable {
 		return items;
 	}
 
+	// ------------------------------------------------------------ pick lists
+
+	/** Names of the records shown in pick lists: field -&gt; id -&gt; name (filled by searches and saved choices). */
+	private final Map<String, Map<String, String>> lookupNames = new HashMap<>();
+
+	/**
+	 * p:autoComplete completeMethod of a pick list; the field comes from the
+	 * component's {@code rbField} attribute. Returns ids; their names come
+	 * from {@link #lookupLabel(String, String)}.
+	 */
+	public List<String> completeLookup(String query) {
+		FacesContext fc = FacesContext.getCurrentInstance();
+		UIComponent c = UIComponent.getCurrentComponent(fc);
+		Object field = c == null ? null : c.getAttributes().get("rbField");
+		ReportDataSource ds = getDataSource();
+		List<String> ids = new ArrayList<>();
+		if (ds == null || field == null)
+			return ids;
+		try {
+			Map<String, String> names = namesOf(field.toString());
+			for (LookupQueries.Item i : service.lookup(ds.getKey(), field.toString(), query)) {
+				names.put(i.getId(), i.getLabel());
+				ids.add(i.getId());
+			}
+		} catch (RuntimeException e) {
+			ReportUi.error(e, ds);
+		}
+		return ids;
+	}
+
+	/** Name of a chosen record (asked once, e.g. for a saved report), else the id. */
+	public String lookupLabel(String field, String id) {
+		if (id == null || id.isEmpty() || field == null)
+			return id;
+		Map<String, String> names = namesOf(field);
+		String key = LookupQueries.key(id);
+		String name = names.get(key);
+		if (name == null && getDataSource() != null) {
+			try {
+				names.putAll(service.lookupNames(getDataSource().getKey(), field, Collections.singletonList(id)));
+			} catch (RuntimeException e) {
+				// the id is shown
+			}
+			name = names.get(key);
+			if (name == null)
+				names.put(key, id);
+		}
+		return name == null ? id : name;
+	}
+
+	private Map<String, String> namesOf(String field) {
+		Map<String, String> m = lookupNames.get(field);
+		if (m == null)
+			lookupNames.put(field, m = new HashMap<>());
+		return m;
+	}
+
 	/**
 	 * Which input the value editor shows: none, text, number, date, datetime,
-	 * choice (one value from a list), choiceList (several), list (free text list).
+	 * choice (one value from a list), choiceList (several), list (free text list),
+	 * lookup (a record searched by name), lookupList (several records).
 	 */
 	public String valueKind(RuleEditor rule) {
 		ReportField f = field(rule.getField());
@@ -268,6 +331,8 @@ public abstract class AbstractReportBean implements Serializable {
 		boolean choices = f.hasChoices() && (op == Operator.EQ || op == Operator.NE || op.getArity() < 0);
 		if (choices)
 			return op.getArity() < 0 ? "choiceList" : "choice";
+		if (f.hasLookup() && (op == Operator.EQ || op == Operator.NE || op.getArity() < 0))
+			return op.getArity() < 0 ? "lookupList" : "lookup";
 		if (op.getArity() < 0)
 			return "list";
 		if (f.getType() == FieldType.DATE)
@@ -312,7 +377,7 @@ public abstract class AbstractReportBean implements Serializable {
 			return Operator.IS_TRUE;
 		if (f.getType().isTemporal())
 			return Operator.BETWEEN;
-		if (f.getType() == FieldType.STRING && !f.hasChoices())
+		if (f.getType() == FieldType.STRING && !f.hasChoices() && !f.hasLookup())
 			return Operator.CONTAINS;
 		return Operator.EQ;
 	}

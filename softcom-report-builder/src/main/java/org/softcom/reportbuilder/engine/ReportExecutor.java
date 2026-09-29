@@ -16,11 +16,13 @@ import javax.persistence.QueryTimeoutException;
 import javax.persistence.TypedQuery;
 import javax.persistence.Tuple;
 
+import org.softcom.reportbuilder.spec.ColumnSpec;
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spi.ReportBuilderConfig;
 import org.softcom.reportbuilder.spi.ReportDataSource;
+import org.softcom.reportbuilder.spi.ReportField;
 
 /**
  * Validates and runs a definition with a plain {@link EntityManager} (no
@@ -47,6 +49,10 @@ public class ReportExecutor {
 		void begin(List<ResultColumn> columns);
 
 		void rows(List<Object[]> rows);
+
+		/** Names of the id columns shown by name, for the rows that follow (column index -&gt; id key -&gt; name). */
+		default void names(Map<Integer, Map<String, String>> names) {
+		}
 
 		/** A subtotal row, written after the last row of its value; {@code labelColumn} shows the word "subtotal". */
 		default void subtotal(Object[] values, int labelColumn) {
@@ -119,7 +125,40 @@ public class ReportExecutor {
 			}
 		}
 		ResultRow totals = spec.isTotals() && start == 0 ? totals(em, ds, spec, run) : null;
-		return new ReportResult(built.getColumns(), rows, display, totals, start, hasMore, System.currentTimeMillis() - t0);
+		Map<Integer, Map<String, String>> names = names(em, ds, spec, rows);
+		ReportResult result = new ReportResult(built.getColumns(), rows, display, totals, start, hasMore,
+				System.currentTimeMillis() - t0);
+		result.setNames(names);
+		return result;
+	}
+
+	/**
+	 * Names of the plain id columns ({@code warehouse_id}) of these rows: one
+	 * query per such column, for the ids on the page / chunk only.
+	 */
+	private static Map<Integer, Map<String, String>> names(EntityManager em, ReportDataSource ds, ReportSpec spec,
+			List<Object[]> rows) {
+		Map<Integer, Map<String, String>> out = new HashMap<>();
+		if (rows.isEmpty())
+			return out;
+		for (int i = 0; i < spec.getColumns().size(); i++) {
+			ColumnSpec c = spec.getColumns().get(i);
+			ReportField f = c.isAggregated() || ReportDataSource.ROW_COUNT_FIELD.equals(c.getField()) ? null
+					: ds.getField(c.getField());
+			if (f == null || !f.hasLookup() || !f.getLookup().isNamesInResults())
+				continue;
+			Set<Object> ids = new LinkedHashSet<>();
+			for (Object[] r : rows)
+				if (r[i] != null)
+					ids.add(r[i]);
+			try {
+				out.put(i, LookupQueries.names(em, f.getLookup(), ids, ds.getQueryTimeoutSeconds()));
+			} catch (RuntimeException e) {
+				// the ids are still shown
+				LOG.log(Level.WARNING, "Report builder: names of " + f.getPath() + " are not available", e);
+			}
+		}
+		return out;
 	}
 
 	/** The subtotals of the values of column {@code by} in {@code rows}, as full-width rows. */
@@ -206,6 +245,7 @@ public class ReportExecutor {
 			}
 			if (rows.isEmpty())
 				break;
+			sink.names(names(em, ds, spec, rows));
 			if (by < 0) {
 				sink.rows(rows);
 			} else {

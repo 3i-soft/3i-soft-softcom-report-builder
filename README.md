@@ -45,15 +45,17 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
    `softcom-customized-view`). generalWarehouse already has one (`PersistenceHelper`). Other apps add a
    `@Stateless` class implementing it that returns their `EntityManager` and `DataSource`.
 
-3. **persistence.xml.** List the two entities in the persistence unit(s) that `IPersistenceHelper` uses:
+3. **persistence.xml.** List the three entities in the persistence unit(s) that `IPersistenceHelper` uses:
 
    ```xml
    <class>org.softcom.reportbuilder.model.ReportDefinition</class>
    <class>org.softcom.reportbuilder.model.ReportRunLog</class>
+   <class>org.softcom.reportbuilder.model.ReportLabel</class>
    ```
 
-4. **Tables.** Copy `src/main/resources/META-INF/softcom-report-builder/sql/postgresql-1.0.0.sql` into the app's
-   Flyway folder as its next version. The script is idempotent.
+4. **Tables.** Copy the scripts of `src/main/resources/META-INF/softcom-report-builder/sql/` into the app's Flyway
+   folder as its next versions, in order: `postgresql-1.0.0.sql`, then `postgresql-1.1.0.sql` (shared users, folders,
+   `rb_label`). They are idempotent. (generalWarehouse: `V5_6_4` and `V5_6_5`.)
 
 5. **Data sources.** Nothing to do: every entity is offered automatically (generalWarehouse has no report code at
    all). Keep the library in the WAR's own `WEB-INF/lib` (its caches are per application). Hand-written data sources
@@ -122,7 +124,22 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
    </ui:include>
    ```
 
+   The labels page (names of tables and fields, for users with `ReportSecurity.canEditLabels()`, by default
+   `REPORT_BUILDER_ADMIN` or `REPORT_BUILDER_LABELS`):
+
+   ```xml
+   <ui:include src="/report-builder/labels-snippet.xhtml" />
+   ```
+
    Then add the menu entries, navigation cases and `web.xml` security constraints as for any other page.
+
+9. **Optional one-time classes** (CDI beans; none is needed for reports to work):
+   - `ReportRowFilter`: rows each user may see (see [Row restrictions](#row-restrictions-written-once-per-application)).
+   - `ReportCodeProvider`: names of the code kinds of `@Code(codeKind = ...)` fields, so reports show names instead
+     of stored codes and conditions offer a pick list (generalWarehouse: `GwReportCodeProvider`, from
+     `CodeNameMappingService`).
+   - `ReportUserDirectory`: the users a report can be shared with, chosen by name instead of typed logins
+     (generalWarehouse: `GwReportUserDirectory`, from sys-mng `getAllUsers`).
 
 ## Report definition (stored as JSON in `rb_report_definition.definition`)
 
@@ -137,8 +154,11 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
        "value": "2026-01-01", "value2": "2026-01-31", "askAtRun": true, "label": "الفترة"},
       {"logic": "OR", "children": [
           {"id": "r2", "field": "dtype", "operator": "IN", "values": ["SalesInvoice", "ConsumptionInvoice"]} ]} ]},
-  "sort": [ {"column": 1, "desc": true} ] }
+  "sort": [ {"column": 1, "desc": true} ],
+  "totals": true, "subtotals": true }
 ```
+
+A date column may carry `"datePart": "DAY" | "MONTH" | "YEAR"`.
 
 When any column has a total, the other columns become the GROUP BY. Conditions marked `askAtRun` are asked for each
 time the report is run. DATE fields use whole-day semantics (`BETWEEN d1 AND d2` includes all of `d2`), so they also
@@ -227,6 +247,34 @@ public class GwReportRowFilter implements ReportRowFilter {
 
 generalWarehouse's `GwReportRowFilter` limits every report to the user's warehouses this way.
 
+## What users can do
+
+- **Tables and relations**: every entity, its relations up to `AUTO_DEPTH`, and conditions through collections
+  ("purchase invoices having a line whose item is ...").
+- **Pick lists**: the id of a related record (`supplier.id`) and plain numbers named after an entity
+  (`warehouse_id`, `towarehouse_id`, `itemId`) are chosen by name or code from a searchable list, which keeps the
+  user's row restrictions (a user only sees their warehouses in it). Plain id columns show names in results and in
+  Excel. The name is guessed from the entity: `name`, `<entity>Name`, `firstName` + `lastName`, another `...Name`,
+  `title` or `description`; a `code` / `<entity>Code` / `number` attribute is searched and shown too.
+- **Code names**: `@Code(codeKind)` fields show the names given by the application's `ReportCodeProvider`.
+- **Starting conditions**: a new report on a table with a deleted/cancelled flag starts with "is not yes (no or
+  empty)" on it - visible and removable. Switch off with `AUTO_DEFAULT_CONDITIONS = false`.
+- **Dates by day, month or year**: a date column (without a total) can be shown and grouped by month (`2026-03`) or
+  year. The SQL is `CAST(DATE_TRUNC('month', ?) AS DATE)` (PostgreSQL), written into the statement text so SELECT
+  and GROUP BY match; another database sets the context parameters `softcom.reportbuilder.MONTH_SQL` / `YEAR_SQL`.
+- **Grand total**: an optional last row with the totals of the whole result (not of the page): each total column
+  over all rows (an average of all rows, not of the groups), and in a plain list the sum of the row's own numbers.
+  It costs one more query, on the first page only.
+- **Subtotals**: in a grouped report with two or more grouping columns, a subtotal row after each value of the first
+  column (the rows are then ordered by that column first). One small query per page / export chunk, for the values
+  shown only. A value cut by the export limit gets no subtotal.
+- **Sharing and folders**: a report is private, shared with everyone, or shared with chosen users and/or roles.
+  Reports can be put in folders; the viewer lists them by folder.
+- **Labels page**: every table, field and value name with the one found automatically, the ones without an Arabic
+  name first; names are saved in `rb_label` and used at once (the data sources are rebuilt, no restart). A field of a
+  shared base class (`MainEntity.creationDate`) is named once for all its tables. The list can be exported to Excel,
+  e.g. to have the missing names translated.
+
 ## Speed rules
 
 For each data source the library asks PostgreSQL's catalog (never the tables themselves; cached 6 hours) for the
@@ -251,11 +299,13 @@ heavy report was stopped by a 1-second test timeout and PostgreSQL cancelled the
 - Excel export reads the result in chunks of 5,000 rows (separate queries, outside a transaction). If rows are
   inserted or deleted while a long export runs, some rows can shift between chunks.
 
-- Automatic data sources show English names where no label is found; add them to `rblabels_ar.properties`.
-- Automatic data sources cannot apply per-user row restrictions (e.g. the user's warehouses); use hand-written data
-  sources for that.
+- Automatic data sources show English names where no label is found; name them on the labels page.
+- Pick lists and names in results rely on naming: a number column is linked to an entity only when its name is the
+  entity's name (plus `_id` / `Id`, optionally after to/from/parent...); an entity without a name-like text attribute
+  gets no pick list.
+- Subtotals are by the first grouping column only (one level).
 
 ## Not in 1.0 (possible next steps)
 
-- Grouping by month/year of a date, charts, scheduled/e-mailed reports, PDF (JasperReports) layouts.
+- Charts, scheduled/e-mailed reports, PDF (JasperReports) layouts, several subtotal levels.
 - Reports across several applications' databases (would need a reporting database, e.g. with `postgres_fdw`).

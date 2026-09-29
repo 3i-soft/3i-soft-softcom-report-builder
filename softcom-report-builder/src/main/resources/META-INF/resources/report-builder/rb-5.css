@@ -14,6 +14,8 @@
 	--rb-danger: #b42318;
 	--rb-radius: 10px;
 	color: var(--rb-text);
+	/* host wrappers such as gw's .card-title capitalize every word: codes, logins and English names must stay as written */
+	text-transform: none;
 }
 
 /* use the host font everywhere (the PrimeFaces theme would otherwise fall back to a serif Arabic font) */

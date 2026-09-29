@@ -19,6 +19,7 @@ import org.softcom.reportbuilder.testmodel.TItem;
 import org.softcom.reportbuilder.testmodel.TItemKind;
 import org.softcom.reportbuilder.testmodel.TOrder;
 import org.softcom.reportbuilder.testmodel.TOrderLine;
+import org.softcom.reportbuilder.testmodel.TSupplier;
 import org.softcom.reportbuilder.testmodel.TWarehouse;
 
 /**
@@ -60,6 +61,11 @@ final class TestDb {
 			em.close();
 			if (!ordersSeeded)
 				seedOrders(emf);
+			em = emf.createEntityManager();
+			boolean suppliersSeeded = em.find(TSupplier.class, 1.0) != null;
+			em.close();
+			if (!suppliersSeeded)
+				seedSuppliers(emf);
 		}
 		return emf;
 	}
@@ -116,6 +122,16 @@ final class TestDb {
 		o2.getLines().add(l3);
 		em.persist(o1);
 		em.persist(o2);
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	/** Entities with a primitive id inherited from a mapped superclass, as in generalWarehouse. */
+	private static void seedSuppliers(EntityManagerFactory factory) {
+		EntityManager em = factory.createEntityManager();
+		em.getTransaction().begin();
+		em.persist(new TSupplier(1, "Supplier A"));
+		em.persist(new TSupplier(2, "Supplier B"));
 		em.getTransaction().commit();
 		em.close();
 	}

@@ -14,8 +14,6 @@ import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
 import javax.persistence.criteria.Selection;
 import javax.persistence.Tuple;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.SingularAttribute;
 
 import org.softcom.reportbuilder.spec.Aggregate;
 import org.softcom.reportbuilder.spec.ColumnSpec;
@@ -169,16 +167,9 @@ public final class ReportQueryBuilder {
 
 	private static String idAttribute(EntityManager em, Class<?> entity) {
 		try {
-			return idName(em.getMetamodel().entity(entity));
+			return JpaIds.singleIdName(em.getMetamodel().entity(entity));
 		} catch (IllegalArgumentException e) {
 			return null;
 		}
-	}
-
-	private static <X> String idName(EntityType<X> type) {
-		if (!type.hasSingleIdAttribute())
-			return null;
-		SingularAttribute<? super X, ?> id = type.getId(type.getIdType().getJavaType());
-		return id == null ? null : id.getName();
 	}
 }

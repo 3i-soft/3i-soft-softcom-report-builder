@@ -36,6 +36,7 @@ import javax.persistence.metamodel.PluralAttribute;
 import javax.persistence.metamodel.SingularAttribute;
 import javax.persistence.metamodel.Type;
 
+import org.softcom.reportbuilder.engine.JpaIds;
 import org.softcom.reportbuilder.engine.ValueConverter;
 import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportBuilderConfig;
@@ -253,6 +254,8 @@ public final class EntityDiscovery {
 					: path.startsWith(elementPrefix) && path.indexOf('.', elementPrefix.length()) < 0;
 			if (id || !own)
 				f.aggregatable(false);
+			if (id && type.isNumeric())
+				f.format("0"); // an id reads 12345, not 12,345
 			if (type == FieldType.ENUM)
 				f.enumValues(enumLabels(a.getJavaType(), labels));
 			ds.add(f);
@@ -356,15 +359,8 @@ public final class EntityDiscovery {
 	}
 
 	/** The single, simple id attribute (needed for stable paging), or null (composite / embedded id). */
-	private static <X> String idName(EntityType<X> type) {
-		try {
-			if (!type.hasSingleIdAttribute() || type.getIdType().getPersistenceType() != Type.PersistenceType.BASIC)
-				return null;
-			SingularAttribute<? super X, ?> id = type.getId(type.getIdType().getJavaType());
-			return id == null ? null : id.getName();
-		} catch (RuntimeException e) {
-			return null;
-		}
+	private static String idName(EntityType<?> type) {
+		return JpaIds.singleIdName(type);
 	}
 
 	/** Id first, then simple attributes, then relations; each group by name - stable field lists. */

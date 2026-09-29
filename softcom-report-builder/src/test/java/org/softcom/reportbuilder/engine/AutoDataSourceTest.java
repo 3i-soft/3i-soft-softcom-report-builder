@@ -95,6 +95,18 @@ public class AutoDataSourceTest {
 	}
 
 	@Test
+	public void idInheritedFromAMappedSuperclassLikeGeneralWarehouse() {
+		ReportDataSource supplier = discover().get("auto.TSupplier");
+		assertNotNull("generalWarehouse entities inherit '@Id double id' from MainEntity", supplier);
+		assertNotNull(supplier.getField("id"));
+		assertNotNull(supplier.getField("supplierName"));
+		ReportSpec s = new ReportSpec();
+		s.setDataSource(supplier.getKey());
+		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("supplierName", Aggregate.NONE))));
+		assertEquals(2, executor.run(em, supplier, s, null, 0, 10).getRows().size());
+	}
+
+	@Test
 	public void oneWayCollectionsGetTheirOwnDataSource() {
 		Map<String, ReportDataSource> all = discover();
 		ReportDataSource lines = all.get("auto.TOrder.lines");

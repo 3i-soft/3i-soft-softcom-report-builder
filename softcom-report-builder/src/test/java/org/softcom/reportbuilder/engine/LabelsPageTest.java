@@ -88,12 +88,13 @@ public class LabelsPageTest {
 		EntityManager em = TestDb.emf().createEntityManager();
 		try {
 			em.getTransaction().begin();
-			ReportLabel old = em.find(ReportLabel.class, "TItem.code");
-			if (old != null)
-				em.remove(old);
-			ReportLabel l = new ReportLabel("TItem.code");
+			// the database may keep the row of an earlier run (PostgreSQL)
+			ReportLabel l = em.find(ReportLabel.class, "TItem.code");
+			if (l == null) {
+				l = new ReportLabel("TItem.code");
+				em.persist(l);
+			}
 			l.setLabelAr("رمز المادة");
-			em.persist(l);
 			em.getTransaction().commit();
 			em.clear();
 			List<ReportLabel> all = em.createNamedQuery(ReportLabel.FIND_ALL, ReportLabel.class).getResultList();

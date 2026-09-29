@@ -103,6 +103,8 @@ public class AutoDataSourceTest {
 		ReportSpec s = new ReportSpec();
 		s.setDataSource(supplier.getKey());
 		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("supplierName", Aggregate.NONE))));
+		// the suppliers of TestDb (IdFormatTest adds others)
+		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("n", "supplierName", Operator.STARTS_WITH, "Supplier ")));
 		assertEquals(5, executor.run(em, supplier, s, null, 0, 10).getRows().size());
 	}
 
@@ -130,7 +132,8 @@ public class AutoDataSourceTest {
 		ReportSpec s = new ReportSpec();
 		s.setDataSource(supplier.getKey());
 		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("supplierName", Aggregate.NONE))));
-		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("d", "deleted", Operator.IS_NOT_TRUE)));
+		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("d", "deleted", Operator.IS_NOT_TRUE),
+				FilterNode.rule("n", "supplierName", Operator.STARTS_WITH, "Supplier ")));
 		List<String> names = texts(executor.run(em, supplier, s, null, 0, 10), supplier, 0);
 		assertEquals(4, names.size());
 		assertTrue(names.contains("Supplier D"));

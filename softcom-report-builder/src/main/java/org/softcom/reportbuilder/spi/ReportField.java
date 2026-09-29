@@ -105,7 +105,17 @@ public class ReportField implements Serializable {
 		return this;
 	}
 
-	/** Display format: a java.text pattern for numbers/dates, e.g. "#,##0.00", "0" or "yyyy-MM-dd". */
+	/**
+	 * Display format of ids: the value exactly as stored, without thousands
+	 * separators or rounding (12345, 12.5, 20260929150412) - ids may be decimal
+	 * numbers (generalWarehouse: {@code double id}, column {@code numeric}).
+	 */
+	public static final String PLAIN_FORMAT = "plain";
+
+	/**
+	 * Display format: a java.text pattern for numbers/dates, e.g. "#,##0.00" or
+	 * "yyyy-MM-dd", or {@link #PLAIN_FORMAT}.
+	 */
 	public ReportField format(String format) {
 		this.format = format;
 		return this;

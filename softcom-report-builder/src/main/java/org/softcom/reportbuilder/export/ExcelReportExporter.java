@@ -26,6 +26,7 @@ import org.softcom.reportbuilder.engine.ResultColumn;
 import org.softcom.reportbuilder.spec.DatePart;
 import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportDataSource;
+import org.softcom.reportbuilder.spi.ReportField;
 
 /**
  * Streams rows into an .xlsx file with POI's SXSSF (only a small window of rows
@@ -144,6 +145,11 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 			String name = columnNames == null ? null : columnNames.get(LookupQueries.key(v));
 			if (name != null) {
 				cell.setCellValue(name);
+				if (cellStyles == boldStyles)
+					cell.setCellStyle(boldText);
+			} else if (v instanceof Number && ReportField.PLAIN_FORMAT.equals(c.getFormat())) {
+				// ids as text: Excel would show 12,345.00 or 2.02609E+13
+				cell.setCellValue(ReportFormatter.plain((Number) v));
 				if (cellStyles == boldStyles)
 					cell.setCellStyle(boldText);
 			} else if (v instanceof Number) {

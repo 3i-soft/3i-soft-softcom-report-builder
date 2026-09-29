@@ -360,7 +360,7 @@ public final class EntityDiscovery {
 			if (lookup != null)
 				f.lookup(lookup).aggregatable(false);
 			if ((id || lookup != null) && type.isNumeric())
-				f.format("0"); // an id reads 12345, not 12,345
+				f.format(ReportField.PLAIN_FORMAT); // an id reads 12345 or 12.5 exactly, not 12,345.00
 			if (type == FieldType.ENUM)
 				f.enumValues(enumLabels(a.getJavaType(), labels));
 			// @Code(codeKind = 3444): names instead of stored codes, and a pick list in conditions

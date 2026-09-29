@@ -150,9 +150,16 @@ work on timestamp columns and still use an index. DATETIME fields do the same wh
 `AutoDataSourceProvider` reads the JPA metamodel of the persistence unit behind `IPersistenceHelper`:
 
 - `auto.<Entity>`: one row per entity, with its simple attributes and those of its many-to-one / one-to-one
-  relations, two levels deep (`customer.name`, `customer.city.name`). Joins are only made when a report uses them.
+  relations, three levels deep (`customer.name`, `customer.city.name`, `customer.city.country.name`). Joins are only
+  made when a report uses them. Fields are taken level by level (at most 500 per data source), so a large model never
+  pushes out the direct fields.
+- **Conditions through collections** (not columns): each one-to-many / many-to-many collection of the entity adds
+  condition-only fields, listed as "يحتوي على: ..." / "Contains: ...". On purchase invoices,
+  `invoiceLines.item.itemName = X` returns the invoices having at least one line with item X - each invoice once
+  (an `EXISTS` subquery). Several such conditions are checked independently (each may match a different line).
 - `auto.<Entity>.<collection>`: one row per element of a one-to-many collection whose element has no relation back
-  (generalWarehouse's `Invoice.invoiceLines`). The owner's numbers are not summable there (they repeat per line).
+  (generalWarehouse's `Invoice.invoiceLines`). The element's fields come first; the owner's numbers are not summable
+  there (they repeat per line).
 - Subclasses are data sources of their own (`auto.SalesInvoice` only returns sales invoices).
 - Only the row's own numbers can be summed or averaged: a related entity's number (`invoice.total` on an invoice
   line) would be counted once per row.
@@ -181,7 +188,7 @@ work on timestamp columns and still use an index. DATETIME fields do the same wh
 | `softcom.reportbuilder.AUTO_DATA_SOURCES` | `true` | `false` turns the automatic data sources off |
 | `softcom.reportbuilder.AUTO_EXCLUDE` | - | entity names never offered nor reachable, e.g. `AuditEntity, ExceptionLog` |
 | `softcom.reportbuilder.AUTO_REQUIRED_ROLE` | - | permission needed to see the automatic data sources |
-| `softcom.reportbuilder.AUTO_DEPTH` | `2` | relation levels offered (0-3) |
+| `softcom.reportbuilder.AUTO_DEPTH` | `3` | relation levels offered (0-3) |
 | `softcom.reportbuilder.LARGE_TABLE_ROWS` | `200000` | from this estimated size a report needs a fast condition |
 | `softcom.reportbuilder.MAX_DATE_RANGE_DAYS` | `366` | longest period of a fast date condition on a large table |
 | `softcom.reportbuilder.QUERY_TIMEOUT_SECONDS` | `30` | query timeout of the automatic data sources |

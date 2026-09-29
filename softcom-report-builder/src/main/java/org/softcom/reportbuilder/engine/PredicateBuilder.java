@@ -7,7 +7,11 @@ import java.util.List;
 
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.Expression;
+import javax.persistence.criteria.From;
+import javax.persistence.criteria.JoinType;
 import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+import javax.persistence.criteria.Subquery;
 
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.Operator;
@@ -62,10 +66,33 @@ class PredicateBuilder {
 		return node.getLogic() == FilterNode.Logic.OR ? cb.or(array) : cb.and(array);
 	}
 
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private Predicate rule(FilterNode r) {
 		ReportField f = ds.getField(r.getField());
-		Expression<?> path = ctx.field(f);
+		return f.isViaCollection() ? exists(r, f) : compare(r, f, ctx.field(f));
+	}
+
+	/**
+	 * A condition on a field reached through a collection of the root means
+	 * "the root has at least one element where ...": EXISTS (SELECT ... FROM
+	 * Root r2 JOIN r2.collection e ... WHERE r2 = root AND condition), so a root
+	 * row is returned once however many elements match.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private Predicate exists(FilterNode r, ReportField f) {
+		Subquery sq = ctx.getQuery().subquery(ds.getRootEntity());
+		// correlated to the outer root: the subquery joins the collection's table only (no second copy of the root)
+		Root<?> owner = sq.correlate((Root) ctx.getRoot());
+		String[] parts = f.getPath().substring(f.getCollection().length() + 1).split("\\.");
+		From<?, ?> current = owner.join(f.getCollection(), JoinType.INNER);
+		for (int i = 0; i < parts.length - 1; i++)
+			current = current.join(parts[i], JoinType.LEFT);
+		sq.select(owner);
+		sq.where(compare(r, f, current.get(parts[parts.length - 1])));
+		return cb.exists(sq);
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private Predicate compare(FilterNode r, ReportField f, Expression<?> path) {
 		Class<?> javaType = ValueConverter.wrap(path.getJavaType());
 		Operator op = r.getOperator();
 		switch (op) {

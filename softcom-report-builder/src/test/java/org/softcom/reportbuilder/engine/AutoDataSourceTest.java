@@ -136,7 +136,9 @@ public class AutoDataSourceTest {
 		ReportDataSource line = discover().get("auto.TInvoiceLine");
 		assertEquals(FieldType.DATETIME, line.getField("invoice.invoiceDate").getType());
 		assertNotNull("two relations deep", line.getField("invoice.warehouse.name"));
-		assertNull("three relations deep is beyond the default depth", line.getField("invoice.warehouse.company.name"));
+		assertNotNull("three relations deep (the default)", line.getField("invoice.warehouse.company.name"));
+		assertNull("depth 2", discover(new EntityDiscovery.Options().depth(2)).get("auto.TInvoiceLine")
+				.getField("invoice.warehouse.company.name"));
 		assertEquals(FieldType.BOOLEAN, line.getField("invoice.closed").getType());
 
 		ReportField kind = discover().get("auto.TItem").getField("kind");
@@ -190,6 +192,75 @@ public class AutoDataSourceTest {
 		assertEquals("English from @FieldInfo(label)", "Company name", company.getLabel(Locale.ENGLISH));
 		assertEquals("through a relation", "Warehouse - اسم المخزن",
 				all.get("auto.TInvoice").getField("warehouse.name").getLabel(AR));
+	}
+
+	@Test
+	public void conditionsThroughACollectionReturnEachRowOnce() {
+		ReportDataSource invoice = discover().get("auto.TInvoice");
+		ReportField itemName = invoice.getField("lines.item.name");
+		assertNotNull("invoices -> lines -> item, as a condition", itemName);
+		assertTrue(itemName.isViaCollection());
+		assertEquals("lines", itemName.getCollection());
+		assertFalse(itemName.isGroupable());
+		assertNotNull(invoice.getField("lines.quantity"));
+
+		ReportSpec s = new ReportSpec();
+		s.setDataSource(invoice.getKey());
+		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("id", Aggregate.NONE))));
+		s.setFilter(FilterNode.rule("i", "lines.item.name", Operator.EQ, "bread"));
+		assertEquals("invoices having a bread line", Arrays.asList(1000L, 1002L), ids(executor.run(em, invoice, s, null, 0, 10)));
+		s.setFilter(FilterNode.rule("q", "lines.quantity", Operator.GT, "9"));
+		assertEquals(Arrays.asList(1001L, 1003L, 1004L), ids(executor.run(em, invoice, s, null, 0, 10)));
+		s.setFilter(FilterNode.rule("a", "lines.item.name", Operator.EQ, "apple"));
+		assertEquals("each invoice once", Arrays.asList(1000L, 1001L, 1003L, 1004L),
+				ids(executor.run(em, invoice, s, null, 0, 10)));
+		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("a", "lines.item.name", Operator.EQ, "apple"),
+				FilterNode.rule("c", "closed", Operator.IS_FALSE)));
+		assertEquals(Arrays.asList(1003L), ids(executor.run(em, invoice, s, null, 0, 10)));
+
+		ReportDataSource order = discover().get("auto.TOrder");
+		ReportSpec o = new ReportSpec();
+		o.setDataSource(order.getKey());
+		o.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("id", Aggregate.NONE))));
+		o.setFilter(FilterNode.rule("i", "lines.item.name", Operator.IN, "bread"));
+		assertEquals("one-way collection too", Arrays.asList(1L), ids(executor.run(em, order, o, null, 0, 10)));
+	}
+
+	@Test
+	public void conditionOnlyFieldsCannotBeColumns() {
+		ReportDataSource invoice = discover().get("auto.TInvoice");
+		ReportSpec s = new ReportSpec();
+		s.setDataSource(invoice.getKey());
+		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("lines.item.name", Aggregate.NONE))));
+		try {
+			executor.run(em, invoice, s, null, 0, 10);
+			org.junit.Assert.fail();
+		} catch (ReportException e) {
+			assertEquals("rb.error.conditionOnly", e.getMessageKey());
+		}
+	}
+
+	@Test
+	public void aFieldBudgetKeepsTheNearestFields() {
+		// invoice line: 4 own fields + invoice (3) and item (6) = 13; the depth-2/3 fields do not fit
+		ReportDataSource line = discover(new EntityDiscovery.Options().maxFields(13)).get("auto.TInvoiceLine");
+		assertEquals(13, line.getFields().size());
+		assertNotNull(line.getField("item.name"));
+		assertNotNull(line.getField("invoice.closed"));
+		assertNull(line.getField("invoice.warehouse.name"));
+		// collection data source: the lines and their item come before the order's own relations
+		ReportDataSource lines = discover(new EntityDiscovery.Options().maxFields(9)).get("auto.TOrder.lines");
+		assertNotNull(lines.getField("lines.item.name"));
+		assertNotNull(lines.getField("id"));
+		assertNull(lines.getField("customer.name"));
+	}
+
+	private static List<Long> ids(ReportResult r) {
+		List<Long> ids = new ArrayList<>();
+		for (Object[] row : r.getRows())
+			ids.add(((Number) row[0]).longValue());
+		java.util.Collections.sort(ids);
+		return ids;
 	}
 
 	@Test

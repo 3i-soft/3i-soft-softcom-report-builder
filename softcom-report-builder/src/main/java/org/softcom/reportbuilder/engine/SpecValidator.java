@@ -56,6 +56,8 @@ public final class SpecValidator {
 				continue;
 			}
 			ReportField f = field(ds, c.getField());
+			if (f.isViaCollection())
+				throw new ReportException("rb.error.conditionOnly", f.getPath());
 			if (!agg.supports(f.getType(), f.isAggregatable()))
 				throw new ReportException("rb.error.aggregateNotAllowed", agg, f.getPath());
 			if (grouped && agg == Aggregate.NONE && !f.isGroupable())

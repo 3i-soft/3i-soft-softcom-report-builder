@@ -143,10 +143,15 @@ public abstract class AbstractReportBean implements Serializable {
 		SpeedInfo sp = getSpeed();
 		Map<String, List<SelectItem>> groups = new LinkedHashMap<>();
 		for (ReportField f : ds.getFields(filterableOnly)) {
+			// fields reached through a collection only make sense as conditions ("has a line where ...")
+			if (!filterableOnly && f.isViaCollection())
+				continue;
 			String label = f.getLabel(getLocale());
 			SelectItem item = new SelectItem(f.getPath(), sp.isFast(f.getPath()) ? label + " " + FAST_MARK : label);
-			String join = f.getJoinPath();
+			String join = f.isViaCollection() ? f.getPath().substring(0, f.getPath().lastIndexOf('.')) : f.getJoinPath();
 			String groupLabel = join == null || !ds.isAutomatic() ? null : ds.getJoinLabel(join, getLocale());
+			if (groupLabel != null && f.isViaCollection())
+				groupLabel = ReportUi.text("rb.group.contains", groupLabel);
 			if (groupLabel == null) {
 				items.add(item);
 			} else {

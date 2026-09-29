@@ -34,6 +34,7 @@ public class ReportField implements Serializable {
 	private String format;
 	private Map<String, String> enumValues = Collections.emptyMap();
 	private ChoiceSource choiceSource;
+	private String collection;
 
 	public ReportField(String path, FieldType type) {
 		this(path, type, null);
@@ -119,6 +120,32 @@ public class ReportField implements Serializable {
 		return this;
 	}
 
+	/**
+	 * Marks a field reached through a one-to-many collection of the root,
+	 * e.g. {@code invoiceLines.item.itemName} with collection
+	 * {@code invoiceLines}. It can only be used in conditions, which mean
+	 * "has at least one element where ..." (an EXISTS subquery, so the root's
+	 * rows are never repeated); it cannot be a column.
+	 */
+	public ReportField viaCollection(String collectionAttribute) {
+		if (collectionAttribute == null || !path.startsWith(collectionAttribute + "."))
+			throw new IllegalArgumentException("Field '" + path + "' does not start with collection '" + collectionAttribute + "'");
+		this.collection = collectionAttribute;
+		this.groupable = false;
+		this.aggregatable = false;
+		return this;
+	}
+
+	/** The root's collection this field is reached through, or null. */
+	public String getCollection() {
+		return collection;
+	}
+
+	/** Condition-only field reached through a collection (see {@link #viaCollection}). */
+	public boolean isViaCollection() {
+		return collection != null;
+	}
+
 	/** Allowed values looked up at run time (e.g. a code table). */
 	public ReportField choices(ChoiceSource source) {
 		this.choiceSource = source;
@@ -167,7 +194,7 @@ public class ReportField implements Serializable {
 
 	/** The path of the join this field is reached through, or null for a root attribute / computed field. */
 	public String getJoinPath() {
-		if (expression != null)
+		if (expression != null || collection != null)
 			return null;
 		int dot = path.lastIndexOf('.');
 		return dot < 0 ? null : path.substring(0, dot);

@@ -93,6 +93,7 @@ public class ReportDataSource implements Serializable {
 	}
 
 	public ReportDataSource add(ReportField field) {
+		// a field reached through a collection is resolved in its own subquery: no declared join
 		String joinPath = field.getJoinPath();
 		if (joinPath != null && !joins.containsKey(joinPath))
 			throw new IllegalArgumentException("Field '" + field.getPath() + "' needs join '" + joinPath + "' to be declared first");
@@ -180,7 +181,16 @@ public class ReportDataSource implements Serializable {
 		return this;
 	}
 
-	/** Label of a declared join, or null when none was given. */
+	/**
+	 * Display name of a relation path that is not a declared join (the
+	 * collections behind condition-only fields), used to group their fields.
+	 */
+	public ReportDataSource groupLabels(String path, String labelAr, String labelEn) {
+		joinLabels.put(path, new String[] { labelAr, labelEn });
+		return this;
+	}
+
+	/** Label of a declared join (or of a {@link #groupLabels} path), or null when none was given. */
 	public String getJoinLabel(String path, Locale locale) {
 		String[] l = joinLabels.get(path);
 		if (l == null)

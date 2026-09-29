@@ -7,11 +7,13 @@ import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +65,6 @@ public final class EntityDiscovery {
 	private static final Logger LOG = Logger.getLogger(EntityDiscovery.class.getName());
 
 	public static final String KEY_PREFIX = "auto.";
-	public static final int MAX_FIELDS = 400;
 
 	/** Never offered when contained in an attribute name (any case). */
 	private static final String[] SENSITIVE_PARTS = { "password", "passwd", "secret", "token", "credential", "apikey",
@@ -77,14 +78,16 @@ public final class EntityDiscovery {
 
 	/** What to discover; {@link #fromConfig()} reads {@link ReportBuilderConfig}. */
 	public static final class Options {
-		private int depth = 2;
+		private int depth = 3;
+		private int maxFields = 500;
+		private int maxConditionFields = 250;
 		private final Set<String> excluded = new HashSet<>();
 		private String requiredRole;
 		private int queryTimeoutSeconds = 30;
 
 		public static Options fromConfig() {
 			Options o = new Options();
-			o.depth(ReportBuilderConfig.getInt(ReportBuilderConfig.AUTO_DEPTH, 2, 0, 3));
+			o.depth(ReportBuilderConfig.getInt(ReportBuilderConfig.AUTO_DEPTH, 3, 0, 3));
 			o.requiredRole(ReportBuilderConfig.get(ReportBuilderConfig.AUTO_REQUIRED_ROLE, null));
 			o.queryTimeoutSeconds(ReportBuilderConfig.getInt(ReportBuilderConfig.QUERY_TIMEOUT_SECONDS, 30, 1, 3600));
 			String excluded = ReportBuilderConfig.get(ReportBuilderConfig.AUTO_EXCLUDE, "");
@@ -95,6 +98,18 @@ public final class EntityDiscovery {
 
 		public Options depth(int depth) {
 			this.depth = Math.max(0, depth);
+			return this;
+		}
+
+		/** Most fields (columns and conditions) one data source offers; the nearest relations come first. */
+		public Options maxFields(int maxFields) {
+			this.maxFields = Math.max(1, maxFields);
+			return this;
+		}
+
+		/** Most condition-only fields reached through the root's collections ("has a line where ..."). */
+		public Options maxConditionFields(int maxConditionFields) {
+			this.maxConditionFields = Math.max(0, maxConditionFields);
 			return this;
 		}
 
@@ -146,8 +161,28 @@ public final class EntityDiscovery {
 	private static ReportDataSource entitySource(EntityType<?> t, LabelResolver labels, Options options) {
 		ReportDataSource ds = new ReportDataSource(KEY_PREFIX + t.getName(), t.getJavaType())
 				.labels(labels.entityAr(t.getName(), t.getJavaType()), labels.entityEn(t.getName(), t.getJavaType()));
-		Builder b = new Builder(ds, labels, options, null);
-		b.addFields(t, "", 0, null, null);
+		new Builder(ds, labels, options, null, null, options.maxFields).addTree(t, "", 0, null, null);
+		// conditions through the entity's collections: "invoices having a line whose item is ..."
+		int budget = options.maxConditionFields;
+		if (options.depth >= 1) {
+			for (Attribute<?, ?> a : sorted(t.getAttributes())) {
+				Attribute.PersistentAttributeType pt = a.getPersistentAttributeType();
+				if (budget <= 0 || (pt != Attribute.PersistentAttributeType.ONE_TO_MANY
+						&& pt != Attribute.PersistentAttributeType.MANY_TO_MANY) || !(a instanceof PluralAttribute))
+					continue;
+				Type<?> elementType = ((PluralAttribute<?, ?, ?>) a).getElementType();
+				String name = a.getName();
+				if (!(elementType instanceof EntityType) || !offered((EntityType<?>) elementType, options)
+						|| !IDENTIFIER.matcher(name).matches() || isSensitive(name))
+					continue;
+				String relAr = labels.attributeAr(t.getName(), name, member(a));
+				String relEn = labels.attributeEn(t.getName(), name, member(a));
+				ds.groupLabels(name, relAr, relEn);
+				Builder c = new Builder(ds, labels, options, null, name, budget);
+				c.addTree((EntityType<?>) elementType, name + ".", 1, relAr, relEn);
+				budget -= c.added;
+			}
+		}
 		return finish(ds, options);
 	}
 
@@ -170,9 +205,10 @@ public final class EntityDiscovery {
 		ReportDataSource ds = new ReportDataSource(KEY_PREFIX + owner.getName() + "." + name, owner.getJavaType())
 				.labels(combineAr(ownerAr, ownerEn, relAr, relEn), ownerEn + " - " + relEn)
 				.join(name, JoinType.INNER).grain(name, elementId).joinLabels(name, relAr, relEn);
-		Builder b = new Builder(ds, labels, options, name + ".");
-		b.addFields(owner, "", 0, null, null);
-		b.addFields(element, name + ".", 1, relAr, relEn);
+		// the element's own fields (the lines, their item...) first: they are what a row of this data source is
+		Builder lines = new Builder(ds, labels, options, name + ".", null, options.maxFields);
+		lines.addTree(element, name + ".", 1, relAr, relEn);
+		new Builder(ds, labels, options, name + ".", null, options.maxFields - lines.added).addTree(owner, "", 0, null, null);
 		return finish(ds, options);
 	}
 
@@ -182,31 +218,67 @@ public final class EntityDiscovery {
 		return ds.automatic(true).requiredRole(options.requiredRole).queryTimeoutSeconds(options.queryTimeoutSeconds);
 	}
 
-	/** Adds the fields of one entity (and of its to-one relations) under a path prefix. */
+	/**
+	 * Adds the fields of an entity and of its to-one relations under a path
+	 * prefix, level by level (all fields of the entity, then those of its
+	 * relations, then theirs...), so a field budget always keeps the nearest
+	 * ones.
+	 */
 	private static final class Builder {
 		private final ReportDataSource ds;
 		private final LabelResolver labels;
 		private final Options options;
 		/** In a collection data source: prefix of the element's fields; other numbers repeat per element. */
 		private final String elementPrefix;
+		/** Condition-only fields reached through this collection of the root (no declared joins), or null. */
+		private final String collection;
+		private final int budget;
+		int added;
 
-		Builder(ReportDataSource ds, LabelResolver labels, Options options, String elementPrefix) {
+		Builder(ReportDataSource ds, LabelResolver labels, Options options, String elementPrefix, String collection,
+				int budget) {
 			this.ds = ds;
 			this.labels = labels;
 			this.options = options;
 			this.elementPrefix = elementPrefix;
+			this.collection = collection;
+			this.budget = budget;
 		}
 
-		void addFields(ManagedType<?> type, String prefix, int depth, String labelPrefixAr, String labelPrefixEn) {
+		private final class Step {
+			final ManagedType<?> type;
+			final String prefix;
+			final int depth;
+			final String labelAr;
+			final String labelEn;
+
+			Step(ManagedType<?> type, String prefix, int depth, String labelAr, String labelEn) {
+				this.type = type;
+				this.prefix = prefix;
+				this.depth = depth;
+				this.labelAr = labelAr;
+				this.labelEn = labelEn;
+			}
+		}
+
+		void addTree(ManagedType<?> type, String prefix, int depth, String labelPrefixAr, String labelPrefixEn) {
+			Deque<Step> queue = new ArrayDeque<>();
+			queue.add(new Step(type, prefix, depth, labelPrefixAr, labelPrefixEn));
+			while (!queue.isEmpty() && added < budget)
+				addLevel(queue.poll(), queue);
+		}
+
+		private void addLevel(Step level, Deque<Step> queue) {
+			ManagedType<?> type = level.type;
 			String entity = type instanceof EntityType ? ((EntityType<?>) type).getName() : type.getJavaType().getSimpleName();
 			for (Attribute<?, ?> a : sorted(type.getAttributes())) {
-				if (ds.getFields().size() >= MAX_FIELDS)
+				if (added >= budget)
 					return;
 				String name = a.getName();
 				if (!IDENTIFIER.matcher(name).matches() || isSensitive(name))
 					continue;
 				try {
-					addAttribute(a, entity, name, prefix, depth, labelPrefixAr, labelPrefixEn);
+					addAttribute(a, entity, name, level, queue);
 				} catch (RuntimeException e) {
 					// one odd attribute (e.g. a virtual accessor) must not cost the whole entity or those pointing to it
 					LOG.log(Level.FINE, "Report builder: attribute " + entity + "." + name + " is not offered", e);
@@ -214,28 +286,31 @@ public final class EntityDiscovery {
 			}
 		}
 
-		private void addAttribute(Attribute<?, ?> a, String entity, String name, String prefix, int depth,
-				String labelPrefixAr, String labelPrefixEn) {
+		private void addAttribute(Attribute<?, ?> a, String entity, String name, Step level, Deque<Step> queue) {
 			AnnotatedElement member = member(a);
 			String ar = labels.attributeAr(entity, name, member);
 			String en = labels.attributeEn(entity, name, member);
-			String fullAr = labelPrefixEn == null ? ar : combineAr(labelPrefixAr, labelPrefixEn, ar, en);
-			String fullEn = labelPrefixEn == null ? en : labelPrefixEn + " - " + en;
+			String fullAr = level.labelEn == null ? ar : combineAr(level.labelAr, level.labelEn, ar, en);
+			String fullEn = level.labelEn == null ? en : level.labelEn + " - " + en;
 			switch (a.getPersistentAttributeType()) {
 			case BASIC:
-				addBasic(a, prefix + name, fullAr, fullEn);
+				addBasic(a, level.prefix + name, fullAr, fullEn);
 				break;
 			case MANY_TO_ONE:
 			case ONE_TO_ONE:
-				if (depth >= options.depth || !(a instanceof SingularAttribute))
+				if (level.depth >= options.depth || !(a instanceof SingularAttribute))
 					break;
 				Type<?> target = ((SingularAttribute<?, ?>) a).getType();
 				if (!(target instanceof EntityType) || !offered((EntityType<?>) target, options))
 					break;
-				String joinPath = prefix + name;
-				ds.join(joinPath, JoinType.LEFT);
-				ds.joinLabels(joinPath, fullAr, fullEn);
-				addFields((EntityType<?>) target, joinPath + ".", depth + 1, fullAr, fullEn);
+				String path = level.prefix + name;
+				if (collection == null) {
+					ds.join(path, JoinType.LEFT);
+					ds.joinLabels(path, fullAr, fullEn);
+				} else {
+					ds.groupLabels(path, fullAr, fullEn); // joined inside the condition's subquery
+				}
+				queue.add(new Step((EntityType<?>) target, path + ".", level.depth + 1, fullAr, fullEn));
 				break;
 			default:
 				// collections, embeddables and element collections are not offered as fields
@@ -258,7 +333,10 @@ public final class EntityDiscovery {
 				f.format("0"); // an id reads 12345, not 12,345
 			if (type == FieldType.ENUM)
 				f.enumValues(enumLabels(a.getJavaType(), labels));
+			if (collection != null)
+				f.viaCollection(collection);
 			ds.add(f);
+			added++;
 		}
 	}
 

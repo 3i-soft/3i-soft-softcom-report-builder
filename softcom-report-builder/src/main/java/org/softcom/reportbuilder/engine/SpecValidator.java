@@ -162,7 +162,8 @@ public final class SpecValidator {
 		}
 	}
 
-	private static void collectAnded(FilterNode node, List<FilterNode> out) {
+	/** Rules that restrict the whole result: reached from the root through AND groups only. */
+	static void collectAnded(FilterNode node, List<FilterNode> out) {
 		if (node == null)
 			return;
 		if (!node.isGroup()) {

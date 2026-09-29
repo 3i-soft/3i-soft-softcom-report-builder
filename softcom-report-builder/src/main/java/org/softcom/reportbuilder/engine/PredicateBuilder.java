@@ -80,7 +80,7 @@ class PredicateBuilder {
 		default:
 			break;
 		}
-		if (f.getType() == FieldType.DATE)
+		if (f.getType() == FieldType.DATE || (f.getType() == FieldType.DATETIME && datesOnly(r)))
 			return dateRule(r, f, (Expression) path, javaType);
 		switch (op) {
 		case EQ:
@@ -158,6 +158,26 @@ class PredicateBuilder {
 		default:
 			throw new ReportException("rb.error.operatorNotAllowed", r.getOperator(), f.getPath());
 		}
+	}
+
+	/**
+	 * A DATETIME rule whose values are all plain days (no time) means whole days,
+	 * like a DATE field: "BETWEEN 2026-01-01 AND 2026-01-31" includes the
+	 * afternoon of the 31st. Values with a time are compared exactly.
+	 */
+	static boolean datesOnly(FilterNode r) {
+		List<String> values = new ArrayList<>();
+		if (r.getOperator().getArity() < 0) {
+			values.addAll(nonBlank(r));
+		} else {
+			values.add(r.getValue());
+			if (r.getOperator().getArity() == 2)
+				values.add(r.getValue2());
+		}
+		for (String v : values)
+			if (v == null || v.trim().length() > 10)
+				return false;
+		return !values.isEmpty();
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })

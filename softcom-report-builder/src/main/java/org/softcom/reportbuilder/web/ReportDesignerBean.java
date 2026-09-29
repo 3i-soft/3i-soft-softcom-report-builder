@@ -2,16 +2,19 @@ package org.softcom.reportbuilder.web;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import javax.annotation.PostConstruct;
 import javax.ejb.EJB;
 import javax.faces.context.FacesContext;
 import javax.faces.model.SelectItem;
+import javax.faces.model.SelectItemGroup;
 import javax.faces.view.ViewScoped;
 import javax.inject.Named;
 
 import org.softcom.reportbuilder.engine.ReportException;
+import org.softcom.reportbuilder.engine.SpeedRules;
 import org.softcom.reportbuilder.engine.SpecValidator;
 import org.softcom.reportbuilder.model.ReportDefinition;
 import org.softcom.reportbuilder.service.ReportDefinitionFacade;
@@ -172,12 +175,15 @@ public class ReportDesignerBean extends AbstractReportBean {
 		sorts = new ArrayList<>();
 		result = null;
 		ReportDataSource ds = getDataSource();
-		if (ds != null && ds.getRequiredFilterField() != null) {
-			// start with the mandatory condition so the report can run
+		// start with the mandatory condition so the report can run: the data source's own required field, or on
+		// a large table a period on an indexed date field
+		String start = ds == null ? null
+				: ds.getRequiredFilterField() != null ? ds.getRequiredFilterField() : SpeedRules.suggestedDateField(ds, getSpeed());
+		if (start != null) {
 			GroupEditor g = new GroupEditor();
-			RuleEditor r = newRule(ds.getRequiredFilterField());
+			RuleEditor r = newRule(start);
 			r.setAskAtRun(true);
-			r.setLabel(fieldLabel(ds.getRequiredFilterField()));
+			r.setLabel(fieldLabel(start));
 			g.getRules().add(r);
 			groups.add(g);
 		}
@@ -390,11 +396,27 @@ public class ReportDesignerBean extends AbstractReportBean {
 		return catalog.get(dataSourceKey);
 	}
 
+	/** Hand-written data sources first, then the application's tables (automatic ones), each group by name. */
 	public List<SelectItem> getDataSourceItems() {
-		List<SelectItem> items = new ArrayList<>();
+		List<SelectItem> prepared = new ArrayList<>();
+		List<SelectItem> tables = new ArrayList<>();
 		for (ReportDataSource ds : catalog.visibleTo(security))
-			items.add(new SelectItem(ds.getKey(), ds.getLabel(getLocale())));
+			(ds.isAutomatic() ? tables : prepared).add(new SelectItem(ds.getKey(), ds.getLabel(getLocale())));
+		Comparator<SelectItem> byLabel = Comparator.comparing(SelectItem::getLabel, String.CASE_INSENSITIVE_ORDER);
+		tables.sort(byLabel);
+		if (tables.isEmpty())
+			return prepared;
+		List<SelectItem> items = new ArrayList<>();
+		if (!prepared.isEmpty())
+			items.add(group(ReportUi.text("rb.group.prepared"), prepared));
+		items.add(group(ReportUi.text("rb.group.tables"), tables));
 		return items;
+	}
+
+	private static SelectItemGroup group(String label, List<SelectItem> items) {
+		SelectItemGroup g = new SelectItemGroup(label);
+		g.setSelectItems(items.toArray(new SelectItem[items.size()]));
+		return g;
 	}
 
 	public List<SelectItem> getColumnFieldItems() {

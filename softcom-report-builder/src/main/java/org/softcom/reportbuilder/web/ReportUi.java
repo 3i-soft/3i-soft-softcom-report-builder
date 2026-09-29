@@ -8,6 +8,8 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
@@ -19,6 +21,7 @@ import javax.faces.application.FacesMessage;
 import javax.faces.context.ExternalContext;
 import javax.faces.context.FacesContext;
 
+import org.softcom.reportbuilder.engine.FieldList;
 import org.softcom.reportbuilder.engine.ReportException;
 import org.softcom.reportbuilder.spec.Aggregate;
 import org.softcom.reportbuilder.spec.Operator;
@@ -80,12 +83,24 @@ public final class ReportUi {
 				if (f != null)
 					args[i] = f.getLabel(locale);
 			}
-			if (args[i] instanceof Operator)
+			if (args[i] instanceof FieldList) {
+				List<String> labels = new ArrayList<>();
+				for (String path : (FieldList) args[i]) {
+					ReportField f = ds == null ? null : ds.getField(path);
+					labels.add(f == null ? path : f.getLabel(locale));
+				}
+				args[i] = String.join(listSeparator(locale), labels);
+			} else if (args[i] instanceof Operator)
 				args[i] = text("rb.op." + ((Operator) args[i]).name());
 			else if (args[i] instanceof Aggregate)
 				args[i] = text("rb.agg." + ((Aggregate) args[i]).name());
 		}
 		error(re.getMessageKey(), args);
+	}
+
+	/** "، " in Arabic, ", " otherwise. */
+	public static String listSeparator(Locale locale) {
+		return locale == null || "ar".equals(locale.getLanguage()) ? "\u060C " : ", ";
 	}
 
 	private static ReportException find(Throwable t) {

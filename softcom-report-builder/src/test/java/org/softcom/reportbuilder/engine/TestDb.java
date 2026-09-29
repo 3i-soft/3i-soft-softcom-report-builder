@@ -17,6 +17,8 @@ import org.softcom.reportbuilder.testmodel.TInvoice;
 import org.softcom.reportbuilder.testmodel.TInvoiceLine;
 import org.softcom.reportbuilder.testmodel.TItem;
 import org.softcom.reportbuilder.testmodel.TItemKind;
+import org.softcom.reportbuilder.testmodel.TOrder;
+import org.softcom.reportbuilder.testmodel.TOrderLine;
 import org.softcom.reportbuilder.testmodel.TWarehouse;
 
 /**
@@ -53,6 +55,11 @@ final class TestDb {
 			em.close();
 			if (!seeded)
 				seed(emf);
+			em = emf.createEntityManager();
+			boolean ordersSeeded = em.find(TOrder.class, 1L) != null;
+			em.close();
+			if (!ordersSeeded)
+				seedOrders(emf);
 		}
 		return emf;
 	}
@@ -87,6 +94,28 @@ final class TestDb {
 		em.persist(new TInvoiceLine(5L, i3, bread, "7", "1.10", 1));
 		em.persist(new TInvoiceLine(6L, open, apple, "100", "2.00", 1));
 		em.persist(new TInvoiceLine(7L, other, apple, "1000", "2.00", 1));
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	/** Orders were added later: seeded on their own so an existing PostgreSQL test database gets them too. */
+	private static void seedOrders(EntityManagerFactory factory) {
+		EntityManager em = factory.createEntityManager();
+		em.getTransaction().begin();
+		TItem apple = em.find(TItem.class, 100L);
+		TItem bread = em.find(TItem.class, 101L);
+		TOrder o1 = new TOrder(1L, at(2026, 3, 1, 0, 0), em.find(TCustomer.class, 500L));
+		TOrder o2 = new TOrder(2L, at(2026, 3, 2, 0, 0), null);
+		TOrderLine l1 = new TOrderLine(1L, apple, "3");
+		TOrderLine l2 = new TOrderLine(2L, bread, "4");
+		TOrderLine l3 = new TOrderLine(3L, apple, "5");
+		for (Object x : Arrays.asList(l1, l2, l3))
+			em.persist(x);
+		o1.getLines().add(l1);
+		o1.getLines().add(l2);
+		o2.getLines().add(l3);
+		em.persist(o1);
+		em.persist(o2);
 		em.getTransaction().commit();
 		em.close();
 	}

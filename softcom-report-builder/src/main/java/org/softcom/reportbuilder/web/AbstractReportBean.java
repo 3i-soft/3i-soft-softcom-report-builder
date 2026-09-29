@@ -2,17 +2,21 @@ package org.softcom.reportbuilder.web;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import javax.ejb.EJB;
 import javax.faces.model.SelectItem;
+import javax.faces.model.SelectItemGroup;
 import javax.inject.Inject;
 
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ReportResult;
 import org.softcom.reportbuilder.engine.ResultColumn;
+import org.softcom.reportbuilder.engine.SpeedInfo;
+import org.softcom.reportbuilder.engine.SpeedRules;
 import org.softcom.reportbuilder.export.ReportFormatter;
 import org.softcom.reportbuilder.service.ReportCatalog;
 import org.softcom.reportbuilder.service.ReportSecurity;
@@ -41,6 +45,9 @@ public abstract class AbstractReportBean implements Serializable {
 	protected ReportResult result;
 	protected int first;
 	protected int pageSize = 50;
+	/** Table statistics of the current data source, asked once per data source and view. */
+	private SpeedInfo speed;
+	private String speedKey;
 
 	/** The data source currently being edited or run, may be null. */
 	public abstract ReportDataSource getDataSource();
@@ -123,14 +130,76 @@ public abstract class AbstractReportBean implements Serializable {
 		return f == null ? null : f.getHint(getLocale());
 	}
 
+	/**
+	 * Fields as menu items; fast fields (indexed column) are marked with the
+	 * {@link #FAST_MARK}. Fields reached through a labelled relation are grouped
+	 * under it (automatic data sources can have a hundred fields).
+	 */
 	protected List<SelectItem> fieldItems(boolean filterableOnly) {
 		List<SelectItem> items = new ArrayList<>();
 		ReportDataSource ds = getDataSource();
 		if (ds == null)
 			return items;
-		for (ReportField f : ds.getFields(filterableOnly))
-			items.add(new SelectItem(f.getPath(), f.getLabel(getLocale())));
+		SpeedInfo sp = getSpeed();
+		Map<String, List<SelectItem>> groups = new LinkedHashMap<>();
+		for (ReportField f : ds.getFields(filterableOnly)) {
+			String label = f.getLabel(getLocale());
+			SelectItem item = new SelectItem(f.getPath(), sp.isFast(f.getPath()) ? label + " " + FAST_MARK : label);
+			String join = f.getJoinPath();
+			String groupLabel = join == null || !ds.isAutomatic() ? null : ds.getJoinLabel(join, getLocale());
+			if (groupLabel == null) {
+				items.add(item);
+			} else {
+				List<SelectItem> g = groups.get(groupLabel);
+				if (g == null)
+					groups.put(groupLabel, g = new ArrayList<>());
+				g.add(item);
+			}
+		}
+		for (Map.Entry<String, List<SelectItem>> g : groups.entrySet()) {
+			SelectItemGroup group = new SelectItemGroup(g.getKey());
+			group.setSelectItems(g.getValue().toArray(new SelectItem[g.getValue().size()]));
+			items.add(group);
+		}
 		return items;
+	}
+
+	/** Marks fields a condition can use an index on. */
+	public static final String FAST_MARK = "\u26A1";
+
+	/** Size and fast fields of the current data source (asked once per data source). */
+	public SpeedInfo getSpeed() {
+		ReportDataSource ds = getDataSource();
+		if (ds == null)
+			return SpeedInfo.UNKNOWN;
+		if (speed == null || !ds.getKey().equals(speedKey)) {
+			SpeedInfo s;
+			try {
+				s = service.speed(ds.getKey());
+			} catch (RuntimeException e) {
+				s = SpeedInfo.UNKNOWN;
+			}
+			speed = s == null ? SpeedInfo.UNKNOWN : s;
+			speedKey = ds.getKey();
+		}
+		return speed;
+	}
+
+	/** Explains that the table is large and which fields keep a report fast, or null. */
+	public String getSpeedNote() {
+		ReportDataSource ds = getDataSource();
+		SpeedInfo sp = getSpeed();
+		if (!SpeedRules.applies(ds, sp))
+			return null;
+		List<String> fast = SpeedRules.usefulFastFields(ds, sp);
+		if (fast.isEmpty())
+			return ReportUi.text("rb.speed.largeNoIndex", sp.getEstimatedRows(), ds.getQueryTimeoutSeconds());
+		List<String> labels = new ArrayList<>();
+		for (String path : fast)
+			if (labels.size() < 6)
+				labels.add(fieldLabel(path));
+		return ReportUi.text("rb.speed.large", sp.getEstimatedRows(), String.join(ReportUi.listSeparator(getLocale()), labels),
+				ReportExecutor.maxDateRangeDays());
 	}
 
 	public List<SelectItem> operatorItems(RuleEditor rule) {
@@ -170,9 +239,15 @@ public abstract class AbstractReportBean implements Serializable {
 			return "list";
 		if (f.getType() == FieldType.DATE)
 			return "date";
+		// reports think in days: a DATETIME field gets a day picker (whole-day comparison in the engine),
+		// unless a saved value already carries a time, which must stay editable
 		if (f.getType() == FieldType.DATETIME)
-			return "datetime";
+			return hasTime(rule.getValue()) || hasTime(rule.getValue2()) ? "datetime" : "date";
 		return f.getType().isNumeric() ? "number" : "text";
+	}
+
+	private static boolean hasTime(String value) {
+		return value != null && value.trim().length() > 10;
 	}
 
 	/**

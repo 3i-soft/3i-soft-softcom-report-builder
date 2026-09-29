@@ -229,6 +229,8 @@
 	color: #374151; font-size: .9rem;
 }
 .rb-root .rb-note .fa { color: var(--rb-accent); margin-top: 3px; }
+/* large-table note: the only warm colour, to catch the eye before a report is refused */
+.rb-root .rb-note-speed .fa { color: #b45309; }
 .rb-root .rb-hint { color: var(--rb-muted); font-size: .82rem; }
 .rb-root .rb-chip {
 	display: inline-flex; align-items: center; gap: 5px;

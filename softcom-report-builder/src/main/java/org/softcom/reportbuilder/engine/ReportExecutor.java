@@ -15,6 +15,7 @@ import javax.persistence.Tuple;
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
+import org.softcom.reportbuilder.spi.ReportBuilderConfig;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 
 /**
@@ -73,7 +74,17 @@ public class ReportExecutor {
 
 	public ReportResult run(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run, int first,
 			int pageSize) {
+		return run(em, ds, spec, run, first, pageSize, null);
+	}
+
+	/**
+	 * @param speed what the database says about the data source's table (see
+	 *              {@link TableStats}); null = no size rule
+	 */
+	public ReportResult run(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run, int first,
+			int pageSize, SpeedInfo speed) {
 		SpecValidator.validate(spec, ds, true);
+		SpeedRules.check(spec, ds, speed, maxDateRangeDays());
 		int size = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
 		int start = Math.max(0, Math.min(first, MAX_FIRST_ROW));
 		long t0 = System.currentTimeMillis();
@@ -88,7 +99,13 @@ public class ReportExecutor {
 	/** Streams up to {@code maxRows} rows (capped by the data source) in chunks. Returns the number of rows. */
 	public int export(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run, int maxRows,
 			RowSink sink) {
+		return export(em, ds, spec, run, maxRows, sink, null);
+	}
+
+	public int export(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run, int maxRows,
+			RowSink sink, SpeedInfo speed) {
 		SpecValidator.validate(spec, ds, true);
+		SpeedRules.check(spec, ds, speed, maxDateRangeDays());
 		int limit = Math.max(1, Math.min(maxRows <= 0 ? ds.getMaxExportRows() : maxRows, ds.getMaxExportRows()));
 		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, spec, run);
 		sink.begin(built.getColumns());
@@ -138,6 +155,16 @@ public class ReportExecutor {
 			LOG.log(Level.WARNING, "Report query failed on data source " + ds.getKey(), e);
 			throw new ReportException(e, "rb.error.queryFailed");
 		}
+	}
+
+	/** Longest date range of a fast condition on a large table ({@link ReportBuilderConfig#MAX_DATE_RANGE_DAYS}). */
+	public static int maxDateRangeDays() {
+		return ReportBuilderConfig.getInt(ReportBuilderConfig.MAX_DATE_RANGE_DAYS, 366, 1, 36600);
+	}
+
+	/** Row count from which a table needs a fast condition ({@link ReportBuilderConfig#LARGE_TABLE_ROWS}). */
+	public static long largeTableRows() {
+		return ReportBuilderConfig.getInt(ReportBuilderConfig.LARGE_TABLE_ROWS, 200000, 1, Integer.MAX_VALUE);
 	}
 
 	/** PostgreSQL reports a statement timeout / cancel with SQLState 57014. */

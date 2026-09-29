@@ -9,7 +9,7 @@
 	<!-- The file name carries a revision (rb-N.css) because JSF resource URLs have no version and, in the Production
 	     stage, browsers keep a stylesheet for up to 7 days: after changing the styles, rename the file to rb-(N+1).css
 	     here and in the other snippet, or users keep the old styles with the new markup. -->
-	<h:outputStylesheet library="report-builder" name="rb-2.css" />
+	<h:outputStylesheet library="report-builder" name="rb-3.css" />
 	<div class="rb-root">
 	<h:form id="rbDesignerForm">
 		<f:event type="preRenderView" listener="#{rbDesigner.touch}" />
@@ -33,7 +33,8 @@
 					</div>
 					<div class="rb-fieldset">
 						<h:outputLabel for="rbDataSource" value="#{rbbundle['rb.dataSource']}" />
-						<p:selectOneMenu id="rbDataSource" value="#{rbDesigner.dataSourceKey}" autoWidth="false" styleClass="rb-w-xl">
+						<p:selectOneMenu id="rbDataSource" value="#{rbDesigner.dataSourceKey}" filter="true" filterMatchMode="contains" autoWidth="false"
+								styleClass="rb-w-xl">
 							<f:selectItem itemLabel="#{rbbundle['rb.chooseDataSource']}" itemValue="#{null}" noSelectionOption="true" />
 							<f:selectItems value="#{rbDesigner.dataSourceItems}" />
 							<p:ajax listener="#{rbDesigner.onDataSourceChange}" process="@form" update="@form" />
@@ -46,6 +47,9 @@
 				</div>
 				<h:panelGroup layout="block" styleClass="rb-note" rendered="#{rbDesigner.requiredFilterNote ne null}">
 					<i class="fa fa-info-circle" /><span>#{rbDesigner.requiredFilterNote}</span>
+				</h:panelGroup>
+				<h:panelGroup layout="block" styleClass="rb-note rb-note-speed" rendered="#{rbDesigner.speedNote ne null}">
+					<i class="fa fa-bolt" /><span>#{rbDesigner.speedNote}</span>
 				</h:panelGroup>
 			</div>
 

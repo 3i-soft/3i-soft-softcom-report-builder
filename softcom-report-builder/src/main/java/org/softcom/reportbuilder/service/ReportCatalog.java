@@ -54,6 +54,21 @@ public class ReportCatalog implements Serializable {
 		return ds != null && (ds.getRequiredRole() == null || security.hasPermission(ds.getRequiredRole()));
 	}
 
+	/**
+	 * An entity the application publishes through a hand-written data source
+	 * with forced filters (e.g. the user's warehouses) is not also offered
+	 * automatically - that copy would bypass the restriction. Sub and super
+	 * classes count: auto.SalesInvoice contains rows of a restricted Invoice.
+	 */
+	static boolean restrictedByHandWritten(ReportDataSource automatic, java.util.Collection<ReportDataSource> handWritten) {
+		Class<?> root = automatic.getRootEntity();
+		for (ReportDataSource ds : handWritten)
+			if (ds.getForcedFilter() != null
+					&& (ds.getRootEntity().isAssignableFrom(root) || root.isAssignableFrom(ds.getRootEntity())))
+				return true;
+		return false;
+	}
+
 	private Map<String, ReportDataSource> all() {
 		Map<String, ReportDataSource> map = dataSources;
 		if (map == null) {
@@ -61,16 +76,23 @@ public class ReportCatalog implements Serializable {
 				map = dataSources;
 				if (map == null) {
 					map = new LinkedHashMap<>();
+					List<ReportDataSource> automatic = new ArrayList<>();
 					for (ReportDataSourceProvider provider : providers) {
 						List<ReportDataSource> list = provider.getDataSources();
 						if (list == null)
 							continue;
 						for (ReportDataSource ds : list) {
 							ds.checkConsistency();
-							if (map.put(ds.getKey(), ds) != null)
+							if (ds.isAutomatic()) {
+								automatic.add(ds);
+							} else if (map.put(ds.getKey(), ds) != null) {
 								throw new IllegalStateException("Duplicate report data source key: " + ds.getKey());
+							}
 						}
 					}
+					for (ReportDataSource ds : automatic)
+						if (!restrictedByHandWritten(ds, map.values()) && !map.containsKey(ds.getKey()))
+							map.put(ds.getKey(), ds);
 					map = Collections.unmodifiableMap(map);
 					dataSources = map;
 				}

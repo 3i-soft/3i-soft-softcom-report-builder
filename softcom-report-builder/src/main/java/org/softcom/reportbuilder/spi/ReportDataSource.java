@@ -56,6 +56,8 @@ public class ReportDataSource implements Serializable {
 	private int maxExportRows = 100000;
 	private String dayFunction;
 	private int queryTimeoutSeconds = 60;
+	private boolean automatic;
+	private final Map<String, String[]> joinLabels = new LinkedHashMap<>();
 
 	public ReportDataSource(String key, Class<?> rootEntity) {
 		if (key == null || !key.matches("[A-Za-z0-9_.\\-]{1,150}"))
@@ -162,6 +164,36 @@ public class ReportDataSource implements Serializable {
 	public ReportDataSource queryTimeoutSeconds(int seconds) {
 		this.queryTimeoutSeconds = Math.max(1, seconds);
 		return this;
+	}
+
+	/** Marks a data source discovered from the JPA metamodel (listed apart from the hand-written ones). */
+	public ReportDataSource automatic(boolean automatic) {
+		this.automatic = automatic;
+		return this;
+	}
+
+	/** Display name of a declared join, used to group the fields reached through it. */
+	public ReportDataSource joinLabels(String path, String labelAr, String labelEn) {
+		if (!joins.containsKey(path))
+			throw new IllegalArgumentException("Join '" + path + "' is not declared");
+		joinLabels.put(path, new String[] { labelAr, labelEn });
+		return this;
+	}
+
+	/** Label of a declared join, or null when none was given. */
+	public String getJoinLabel(String path, Locale locale) {
+		String[] l = joinLabels.get(path);
+		if (l == null)
+			return null;
+		boolean arabic = locale == null || "ar".equals(locale.getLanguage());
+		String s = arabic ? l[0] : l[1];
+		if (s == null || s.isEmpty())
+			s = arabic ? l[1] : l[0];
+		return s == null || s.isEmpty() ? null : s;
+	}
+
+	public boolean isAutomatic() {
+		return automatic;
 	}
 
 	/** Fails fast (at application start-up) on an inconsistent definition. */

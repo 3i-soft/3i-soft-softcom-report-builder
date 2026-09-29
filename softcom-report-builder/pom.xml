@@ -56,7 +56,8 @@
 			<groupId>org.eclipse.persistence</groupId>
 			<artifactId>eclipselink</artifactId>
 			<version>2.6.0</version>
-			<scope>test</scope>
+			<!-- provided by the server (WildFly module org.eclipse.persistence); used to map fields to columns -->
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.h2database</groupId>

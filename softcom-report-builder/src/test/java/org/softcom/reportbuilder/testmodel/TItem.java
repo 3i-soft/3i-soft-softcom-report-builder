@@ -16,6 +16,8 @@ public class TItem {
 	@Enumerated(EnumType.STRING)
 	private TItemKind kind;
 	private boolean active;
+	/** a number on a related entity: summing it over invoice lines would count it once per line */
+	private Integer shelfLifeDays;
 
 	public TItem() {
 	}

@@ -10,6 +10,8 @@
 		<class>org.softcom.reportbuilder.testmodel.TCustomer</class>
 		<class>org.softcom.reportbuilder.testmodel.TInvoice</class>
 		<class>org.softcom.reportbuilder.testmodel.TInvoiceLine</class>
+		<class>org.softcom.reportbuilder.testmodel.TOrder</class>
+		<class>org.softcom.reportbuilder.testmodel.TOrderLine</class>
 		<class>org.softcom.reportbuilder.model.ReportDefinition</class>
 		<class>org.softcom.reportbuilder.model.ReportRunLog</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>

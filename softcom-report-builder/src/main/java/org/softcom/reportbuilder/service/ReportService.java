@@ -23,6 +23,7 @@ import org.softcom.reportbuilder.engine.ReportException;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ReportResult;
 import org.softcom.reportbuilder.engine.ReportRunContext;
+import org.softcom.reportbuilder.engine.SpeedInfo;
 import org.softcom.reportbuilder.export.ExcelReportExporter;
 import org.softcom.reportbuilder.model.ReportDefinition;
 import org.softcom.reportbuilder.model.ReportRunLog;
@@ -50,6 +51,9 @@ public class ReportService {
 	@EJB
 	private ReportDefinitionFacade definitions;
 
+	@EJB
+	private ReportSpeedService speedService;
+
 	@Inject
 	private ReportCatalog catalog;
 
@@ -66,13 +70,24 @@ public class ReportService {
 	public ReportResult preview(ReportSpec spec, Map<String, List<String>> parameters, int first, int pageSize) {
 		if (!security.canDesign())
 			throw new ReportException("rb.error.accessDenied");
-		return execute(ReportRunLog.Kind.PREVIEW, null, spec, parameters, first, pageSize);
+		QueryGate.enter();
+		try {
+			return execute(ReportRunLog.Kind.PREVIEW, null, spec, parameters, first, pageSize);
+		} finally {
+			QueryGate.leave();
+		}
 	}
 
 	/** Runs a saved report the current user can see. */
 	public ReportResult run(Long definitionId, Map<String, List<String>> parameters, int first, int pageSize) {
-		ReportDefinition d = definitions.findVisible(definitionId);
-		return execute(ReportRunLog.Kind.RUN, d.getId(), definitions.spec(d), parameters, first, pageSize);
+		// the slot is taken before any database access: waiting must not hold a pooled connection
+		QueryGate.enter();
+		try {
+			ReportDefinition d = definitions.findVisible(definitionId);
+			return execute(ReportRunLog.Kind.RUN, d.getId(), definitions.spec(d), parameters, first, pageSize);
+		} finally {
+			QueryGate.leave();
+		}
 	}
 
 	/**
@@ -84,6 +99,16 @@ public class ReportService {
 	 */
 	@TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 	public ExportOutcome exportExcel(Long definitionId, ReportSpec unsaved, Map<String, List<String>> parameters, String title,
+			Locale locale, OutputStream out) throws IOException {
+		QueryGate.enter();
+		try {
+			return export(definitionId, unsaved, parameters, title, locale, out);
+		} finally {
+			QueryGate.leave();
+		}
+	}
+
+	private ExportOutcome export(Long definitionId, ReportSpec unsaved, Map<String, List<String>> parameters, String title,
 			Locale locale, OutputStream out) throws IOException {
 		ReportSpec spec;
 		if (definitionId != null) {
@@ -100,8 +125,9 @@ public class ReportService {
 		int rows = 0;
 		Throwable error = null;
 		ExcelReportExporter exporter = new ExcelReportExporter(ds, title, locale);
+		SpeedInfo speed = speedOf(ds);
 		try {
-			rows = executor.export(persistenceHelper.getEntityManager(), ds, filled, context(), 0, exporter);
+			rows = executor.export(persistenceHelper.getEntityManager(), ds, filled, context(), 0, exporter, speed);
 			exporter.write(out);
 			return new ExportOutcome(rows, exporter.isTruncated(), ds.getMaxExportRows());
 		} catch (RuntimeException | IOException e) {
@@ -120,9 +146,10 @@ public class ReportService {
 		long t0 = System.currentTimeMillis();
 		ReportResult result = null;
 		Throwable error = null;
+		SpeedInfo speed = speedOf(ds);
 		try {
 			result = executor.run(persistenceHelper.getEntityManager(), ds, ReportExecutor.applyParameters(spec, parameters),
-					context(), first, pageSize);
+					context(), first, pageSize, speed);
 			return result;
 		} catch (RuntimeException e) {
 			error = e;
@@ -130,6 +157,25 @@ public class ReportService {
 		} finally {
 			log(kind, definitionId, ds.getKey(), started, System.currentTimeMillis() - t0,
 					result == null ? 0 : result.getRows().size(), error);
+		}
+	}
+
+	/** Size and fast fields of a data source the user may use (for the designer's hints). */
+	public SpeedInfo speed(String dataSourceKey) {
+		if (!security.canRun())
+			return SpeedInfo.UNKNOWN;
+		ReportDataSource ds = catalog.get(dataSourceKey);
+		return ReportCatalog.isAllowed(ds, security) ? speedOf(ds) : SpeedInfo.UNKNOWN;
+	}
+
+	/** Table statistics are a hint: whatever goes wrong reading them (another provider, a class missing...), the report runs. */
+	private SpeedInfo speedOf(ReportDataSource ds) {
+		try {
+			SpeedInfo s = speedService.speed(ds);
+			return s == null ? SpeedInfo.UNKNOWN : s;
+		} catch (RuntimeException | LinkageError e) {
+			LOG.log(Level.FINE, "No table statistics for " + ds.getKey(), e);
+			return SpeedInfo.UNKNOWN;
 		}
 	}
 

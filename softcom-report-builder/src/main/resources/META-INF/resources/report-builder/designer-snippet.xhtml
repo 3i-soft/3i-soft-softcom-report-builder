@@ -6,7 +6,10 @@
 		Optional param: viewerPage (view id or outcome of the page including viewer-snippet.xhtml).
 		Icons: Font Awesome 4.0 names only (the HIS templates ship 4.0.3).
 	-->
-	<h:outputStylesheet library="report-builder" name="rb.css" />
+	<!-- The file name carries a revision (rb-N.css) because JSF resource URLs have no version and, in the Production
+	     stage, browsers keep a stylesheet for up to 7 days: after changing the styles, rename the file to rb-(N+1).css
+	     here and in the other snippet, or users keep the old styles with the new markup. -->
+	<h:outputStylesheet library="report-builder" name="rb-2.css" />
 	<div class="rb-root">
 	<h:form id="rbDesignerForm">
 		<f:event type="preRenderView" listener="#{rbDesigner.touch}" />

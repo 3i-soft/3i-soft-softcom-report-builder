@@ -126,6 +126,9 @@
 .rb-root input.form-control:focus,
 .rb-root .ui-inputfield.form-control:focus { border-color: var(--rb-accent); box-shadow: 0 0 0 3px rgba(71, 85, 105, .12); outline: 0; }
 .rb-root .rb-input { width: 170px; max-width: 100%; }
+/* digits of a date read left to right, also on RTL pages */
+.rb-root input.rb-date { direction: ltr; }
+.rb-root input.rb-date[type="datetime-local"] { width: 220px; }
 .rb-root .rb-input-lg { font-size: 1rem; font-weight: 600; }
 
 /* PrimeFaces menus: flat and grey instead of the theme gradient */

@@ -5,9 +5,11 @@
 	<ui:param name="valueLabel" value="#{rbBean.fieldLabel(rule.field)}" />
 	<p:inputText value="#{rule.value}" rendered="#{kind eq 'text' or kind eq 'number'}" styleClass="form-control rb-input" maxlength="500"
 		label="#{valueLabel}" />
-	<p:calendar value="#{rule.dateValue}" rendered="#{kind eq 'date'}" pattern="yyyy-MM-dd" navigator="true" inputStyleClass="form-control rb-input"
-		label="#{valueLabel}" />
-	<p:calendar value="#{rule.dateValue}" rendered="#{kind eq 'datetime'}" pattern="yyyy-MM-dd HH:mm" navigator="true" inputStyleClass="form-control rb-input"
+	<!-- Dates use the browser's own picker (type="date"): its value is always yyyy-MM-dd, the format the rule stores,
+	     whatever the display language. p:calendar is avoided on purpose: templates that load bootstrap-datepicker
+	     (generalWarehouse does) replace jQuery UI's $.fn.datepicker, and p:calendar then submits mm/dd/yyyy. -->
+	<p:inputText type="date" value="#{rule.value}" rendered="#{kind eq 'date'}" styleClass="form-control rb-input rb-date" label="#{valueLabel}" />
+	<p:inputText type="datetime-local" value="#{rule.value}" rendered="#{kind eq 'datetime'}" styleClass="form-control rb-input rb-date"
 		label="#{valueLabel}" />
 	<p:selectOneMenu value="#{rule.value}" rendered="#{kind eq 'choice'}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg"
 		label="#{valueLabel}">
@@ -23,9 +25,8 @@
 	<h:panelGroup rendered="#{rbBean.hasSecondValue(rule)}">
 		<span class="rb-between">#{rbbundle['rb.and']}</span>
 		<p:inputText value="#{rule.value2}" rendered="#{kind eq 'number' or kind eq 'text'}" styleClass="form-control rb-input" label="#{valueLabel}" />
-		<p:calendar value="#{rule.dateValue2}" rendered="#{kind eq 'date'}" pattern="yyyy-MM-dd" navigator="true" inputStyleClass="form-control rb-input"
+		<p:inputText type="date" value="#{rule.value2}" rendered="#{kind eq 'date'}" styleClass="form-control rb-input rb-date" label="#{valueLabel}" />
+		<p:inputText type="datetime-local" value="#{rule.value2}" rendered="#{kind eq 'datetime'}" styleClass="form-control rb-input rb-date"
 			label="#{valueLabel}" />
-		<p:calendar value="#{rule.dateValue2}" rendered="#{kind eq 'datetime'}" pattern="yyyy-MM-dd HH:mm" navigator="true"
-			inputStyleClass="form-control rb-input" label="#{valueLabel}" />
 	</h:panelGroup>
 </ui:composition>

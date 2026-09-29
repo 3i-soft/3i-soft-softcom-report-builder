@@ -122,7 +122,8 @@ public class RuleEditor implements Serializable {
 		this.selected = new ArrayList<>();
 	}
 
-	// ------------------------------------------------ date bindings (p:calendar)
+	// -------------------------- java.util.Date bindings, for custom pages with a Date input
+	// (the bundled pages bind value/value2 directly to <input type="date">, which submits yyyy-MM-dd)
 
 	public Date getDateValue() {
 		return toDate(value);

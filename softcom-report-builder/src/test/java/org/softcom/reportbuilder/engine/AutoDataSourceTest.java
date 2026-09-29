@@ -103,7 +103,61 @@ public class AutoDataSourceTest {
 		ReportSpec s = new ReportSpec();
 		s.setDataSource(supplier.getKey());
 		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("supplierName", Aggregate.NONE))));
-		assertEquals(2, executor.run(em, supplier, s, null, 0, 10).getRows().size());
+		assertEquals(5, executor.run(em, supplier, s, null, 0, 10).getRows().size());
+	}
+
+	private static List<String> texts(ReportResult r, ReportDataSource ds, int column) {
+		List<String> out = new ArrayList<>();
+		for (Object[] row : r.getRows())
+			out.add(org.softcom.reportbuilder.export.ReportFormatter.format(row[column], r.getColumns().get(column), ds,
+					new Locale("ar")));
+		return out;
+	}
+
+	@Test
+	public void deletedFlagsBecomeVisibleDefaultConditions() {
+		ReportDataSource supplier = discover().get("auto.TSupplier");
+		assertEquals(1, supplier.getDefaultConditions().size());
+		assertEquals("deleted", supplier.getDefaultConditions().get(0)[0]);
+		assertEquals(Operator.IS_NOT_TRUE.name(), supplier.getDefaultConditions().get(0)[1]);
+		assertTrue(discover(new EntityDiscovery.Options().defaultConditions(false)).get("auto.TSupplier").getDefaultConditions()
+				.isEmpty());
+		assertTrue("no flag, no default", discover().get("auto.TItem").getDefaultConditions().isEmpty());
+		// rows older than the flag have NULL in it: they are not deleted
+		em.getTransaction().begin();
+		em.createNativeQuery("UPDATE t_supplier SET deleted = NULL WHERE id = 4").executeUpdate();
+		em.getTransaction().commit();
+		ReportSpec s = new ReportSpec();
+		s.setDataSource(supplier.getKey());
+		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("supplierName", Aggregate.NONE))));
+		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("d", "deleted", Operator.IS_NOT_TRUE)));
+		List<String> names = texts(executor.run(em, supplier, s, null, 0, 10), supplier, 0);
+		assertEquals(4, names.size());
+		assertTrue(names.contains("Supplier D"));
+		assertFalse(names.contains("Supplier C (deleted)"));
+	}
+
+	@Test
+	public void codeFieldsShowTheNamesOfTheApplicationsCodes() {
+		Map<String, String> cities = new HashMap<>();
+		cities.put("01", "بغداد");
+		cities.put("02", "البصرة");
+		assertFalse("without a code provider the codes stay as stored",
+				discover().get("auto.TSupplier").getField("cityCode").hasChoices());
+		ReportDataSource supplier = discover(new EntityDiscovery.Options().codeLookup(k -> "CITY".equals(k) ? cities : null))
+				.get("auto.TSupplier");
+		ReportField city = supplier.getField("cityCode");
+		assertTrue("a pick list in conditions", city.hasChoices());
+		assertEquals("sorted by name", Arrays.asList("02", "01"), new ArrayList<>(city.getChoices().keySet()));
+		assertEquals("بغداد", city.choiceLabel("01"));
+		assertEquals("unknown codes are shown as stored", "09", city.choiceLabel("09"));
+		ReportSpec s = new ReportSpec();
+		s.setDataSource(supplier.getKey());
+		s.setColumns(new ArrayList<>(Arrays.asList(new ColumnSpec("cityCode", Aggregate.NONE),
+				new ColumnSpec(ReportDataSource.ROW_COUNT_FIELD, Aggregate.COUNT))));
+		s.setFilter(FilterNode.group(Logic.AND, FilterNode.rule("c", "cityCode", Operator.IN, "01", "02")));
+		ReportResult r = executor.run(em, supplier, s, null, 0, 10);
+		assertEquals(Arrays.asList("بغداد", "البصرة"), texts(r, supplier, 0));
 	}
 
 	@Test

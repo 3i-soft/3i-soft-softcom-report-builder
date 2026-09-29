@@ -104,6 +104,8 @@ class PredicateBuilder {
 			return cb.equal(path, Boolean.TRUE);
 		case IS_FALSE:
 			return cb.equal(path, Boolean.FALSE);
+		case IS_NOT_TRUE:
+			return cb.or(cb.equal(path, Boolean.FALSE), path.isNull());
 		default:
 			break;
 		}

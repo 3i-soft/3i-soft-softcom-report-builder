@@ -20,7 +20,9 @@ import org.softcom.reportbuilder.model.ReportDefinition;
 import org.softcom.reportbuilder.service.ReportDefinitionFacade;
 import org.softcom.reportbuilder.spec.Aggregate;
 import org.softcom.reportbuilder.spec.ColumnSpec;
+import org.softcom.reportbuilder.spec.DatePart;
 import org.softcom.reportbuilder.spec.FilterNode;
+import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spec.SortSpec;
 import org.softcom.reportbuilder.spi.ReportDataSource;
@@ -54,6 +56,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 	private FilterNode.Logic topLogic = FilterNode.Logic.AND;
 	private List<GroupEditor> groups = new ArrayList<>();
 	private List<SortSpec> sorts = new ArrayList<>();
+	private boolean totals;
+	private boolean subtotals;
 	private int ruleSeq;
 
 	@PostConstruct
@@ -117,6 +121,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 		sorts = new ArrayList<>();
 		for (SortSpec s : spec.getSort())
 			sorts.add(s.copy());
+		totals = spec.isTotals();
+		subtotals = spec.isSubtotals();
 		groups = loadedGroups;
 		topLogic = loadedLogic;
 		ruleSeq = maxSeq;
@@ -144,9 +150,15 @@ public class ReportDesignerBean extends AbstractReportBean {
 			ColumnSpec c = columns.get(i);
 			if (c.getField() != null && !c.getField().isEmpty()) {
 				columnIndex.put(i, spec.getColumns().size());
-				spec.getColumns().add(c.copy());
+				ColumnSpec copy = c.copy();
+				// a day / month / year left over from another field or before choosing a total
+				if (copy.getDatePart() != null && !isDateColumn(c))
+					copy.setDatePart(null);
+				spec.getColumns().add(copy);
 			}
 		}
+		spec.setTotals(totals);
+		spec.setSubtotals(subtotals);
 		FilterNode root = FilterNode.group(topLogic);
 		for (GroupEditor g : groups) {
 			FilterNode gn = FilterNode.group(g.getLogic());
@@ -179,14 +191,24 @@ public class ReportDesignerBean extends AbstractReportBean {
 		// a large table a period on an indexed date field
 		String start = ds == null ? null
 				: ds.getRequiredFilterField() != null ? ds.getRequiredFilterField() : SpeedRules.suggestedDateField(ds, getSpeed());
+		GroupEditor g = new GroupEditor();
 		if (start != null) {
-			GroupEditor g = new GroupEditor();
 			RuleEditor r = newRule(start);
 			r.setAskAtRun(true);
 			r.setLabel(fieldLabel(start));
 			g.getRules().add(r);
-			groups.add(g);
 		}
+		// visible, removable defaults such as "deleted is not true"
+		if (ds != null)
+			for (String[] c : ds.getDefaultConditions()) {
+				if (field(c[0]) == null)
+					continue;
+				RuleEditor r = newRule(c[0]);
+				r.setOperator(Operator.valueOf(c[1]));
+				g.getRules().add(r);
+			}
+		if (!g.getRules().isEmpty())
+			groups.add(g);
 	}
 
 	public void addColumn() {
@@ -229,6 +251,19 @@ public class ReportDesignerBean extends AbstractReportBean {
 		ReportField f = field(column.getField());
 		if (f == null || !column.getAggregate().supports(f.getType(), f.isAggregatable()))
 			column.setAggregate(Aggregate.NONE);
+	}
+
+	/** A column of a date field without a total can be shown by day, month or year. */
+	public boolean isDateColumn(ColumnSpec column) {
+		ReportField f = field(column.getField());
+		return f != null && f.getType().isTemporal() && !column.isAggregated();
+	}
+
+	public List<SelectItem> getDatePartItems() {
+		List<SelectItem> items = new ArrayList<>();
+		for (DatePart p : DatePart.values())
+			items.add(new SelectItem(p, ReportUi.text("rb.datePart." + p.name())));
+		return items;
 	}
 
 	public List<SelectItem> aggregateItems(ColumnSpec column) {
@@ -370,6 +405,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 		columns = new ArrayList<>();
 		groups = new ArrayList<>();
 		sorts = new ArrayList<>();
+		totals = false;
+		subtotals = false;
 		topLogic = FilterNode.Logic.AND;
 		result = null;
 		ruleSeq = 0;
@@ -439,6 +476,31 @@ public class ReportDesignerBean extends AbstractReportBean {
 			if (c.isAggregated())
 				return true;
 		return false;
+	}
+
+	/** Subtotals need a second grouping column to break the first one down. */
+	public boolean isSubtotalsPossible() {
+		int grouping = 0;
+		for (ColumnSpec c : columns)
+			if (!c.isAggregated() && c.getField() != null && !c.getField().isEmpty())
+				grouping++;
+		return isGrouped() && grouping >= 2;
+	}
+
+	public boolean isTotals() {
+		return totals;
+	}
+
+	public void setTotals(boolean totals) {
+		this.totals = totals;
+	}
+
+	public boolean isSubtotals() {
+		return subtotals;
+	}
+
+	public void setSubtotals(boolean subtotals) {
+		this.subtotals = subtotals;
 	}
 
 	public Long getDefinitionId() {

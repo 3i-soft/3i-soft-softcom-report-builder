@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -40,6 +41,7 @@ import javax.persistence.metamodel.Type;
 
 import org.softcom.reportbuilder.engine.JpaIds;
 import org.softcom.reportbuilder.engine.ValueConverter;
+import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportBuilderConfig;
 import org.softcom.reportbuilder.spi.ReportDataSource;
@@ -81,6 +83,8 @@ public final class EntityDiscovery {
 		private int depth = 3;
 		private int maxFields = 500;
 		private int maxConditionFields = 250;
+		private boolean defaultConditions = true;
+		private Function<String, Map<String, String>> codeLookup;
 		private final Set<String> excluded = new HashSet<>();
 		private String requiredRole;
 		private int queryTimeoutSeconds = 30;
@@ -90,6 +94,7 @@ public final class EntityDiscovery {
 			o.depth(ReportBuilderConfig.getInt(ReportBuilderConfig.AUTO_DEPTH, 3, 0, 3));
 			o.requiredRole(ReportBuilderConfig.get(ReportBuilderConfig.AUTO_REQUIRED_ROLE, null));
 			o.queryTimeoutSeconds(ReportBuilderConfig.getInt(ReportBuilderConfig.QUERY_TIMEOUT_SECONDS, 30, 1, 3600));
+			o.defaultConditions(ReportBuilderConfig.getBoolean(ReportBuilderConfig.AUTO_DEFAULT_CONDITIONS, true));
 			String excluded = ReportBuilderConfig.get(ReportBuilderConfig.AUTO_EXCLUDE, "");
 			for (String name : excluded.split("[,;\\s]+"))
 				o.exclude(name);
@@ -110,6 +115,18 @@ public final class EntityDiscovery {
 		/** Most condition-only fields reached through the root's collections ("has a line where ..."). */
 		public Options maxConditionFields(int maxConditionFields) {
 			this.maxConditionFields = Math.max(0, maxConditionFields);
+			return this;
+		}
+
+		/** Whether new reports start with "deleted / cancelled is not true" (see {@link EntityDiscovery#isRemovedFlag}). */
+		public Options defaultConditions(boolean defaultConditions) {
+			this.defaultConditions = defaultConditions;
+			return this;
+		}
+
+		/** Names of a code kind (the application's ReportCodeProvider), for attributes marked {@code @Code(codeKind)}. */
+		public Options codeLookup(Function<String, Map<String, String>> codeLookup) {
+			this.codeLookup = codeLookup;
 			return this;
 		}
 
@@ -333,10 +350,19 @@ public final class EntityDiscovery {
 				f.format("0"); // an id reads 12345, not 12,345
 			if (type == FieldType.ENUM)
 				f.enumValues(enumLabels(a.getJavaType(), labels));
+			// @Code(codeKind = 3444): names instead of stored codes, and a pick list in conditions
+			String kind = type == FieldType.STRING && options.codeLookup != null ? codeKind(member(a)) : null;
+			if (kind != null)
+				f.choices(new CodeChoiceSource(kind, options.codeLookup));
 			if (collection != null)
 				f.viaCollection(collection);
 			ds.add(f);
 			added++;
+			// "not deleted" as a visible, removable starting condition (the row's own flag, or the owner's)
+			boolean ownerLevel = elementPrefix != null && path.indexOf('.') < 0;
+			if (options.defaultConditions && collection == null && type == FieldType.BOOLEAN && (own || ownerLevel)
+					&& isRemovedFlag(a.getName()))
+				ds.defaultCondition(path, Operator.IS_NOT_TRUE);
 		}
 	}
 
@@ -411,6 +437,31 @@ public final class EntityDiscovery {
 			if (type instanceof EntityType && options.excluded.contains(((EntityType<?>) type).getName().toLowerCase(Locale.ROOT)))
 				return false;
 		return true;
+	}
+
+	/** The kind of a {@code @Code(codeKind = ...)} annotation (found by name), or null. */
+	static String codeKind(AnnotatedElement element) {
+		if (element == null)
+			return null;
+		for (java.lang.annotation.Annotation a : element.getAnnotations()) {
+			if (!a.annotationType().getSimpleName().equals("Code"))
+				continue;
+			try {
+				Object v = a.annotationType().getMethod("codeKind").invoke(a);
+				String kind = v == null ? "" : String.valueOf(v).trim();
+				if (!kind.isEmpty() && !"0".equals(kind))
+					return kind;
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				// another annotation called Code
+			}
+		}
+		return null;
+	}
+
+	/** A boolean saying the row was deleted or cancelled (deletedInvoice, isDeleted, canceled...). */
+	public static boolean isRemovedFlag(String attribute) {
+		String lower = attribute.toLowerCase(Locale.ROOT);
+		return lower.contains("deleted") || lower.contains("cancel") || lower.contains("removed") || lower.contains("voided");
 	}
 
 	/** Password-like attribute names, never offered. */

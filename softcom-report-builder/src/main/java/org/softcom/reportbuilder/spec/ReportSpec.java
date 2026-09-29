@@ -21,6 +21,10 @@ public class ReportSpec implements Serializable {
 	private List<ColumnSpec> columns = new ArrayList<>();
 	private FilterNode filter;
 	private List<SortSpec> sort = new ArrayList<>();
+	/** Adds a grand total row (totals of the whole result, not of the page). */
+	private boolean totals;
+	/** Grouped reports with two or more grouping columns: a subtotal row after each value of the first one. */
+	private boolean subtotals;
 
 	public ReportSpec copy() {
 		ReportSpec s = new ReportSpec();
@@ -31,6 +35,8 @@ public class ReportSpec implements Serializable {
 		s.filter = filter == null ? null : filter.copy();
 		for (SortSpec o : sort)
 			s.sort.add(o.copy());
+		s.totals = totals;
+		s.subtotals = subtotals;
 		return s;
 	}
 
@@ -39,6 +45,24 @@ public class ReportSpec implements Serializable {
 			if (c.isAggregated())
 				return true;
 		return false;
+	}
+
+	/**
+	 * The column subtotals are computed by: the first grouping column, when
+	 * subtotals are asked for and there is a second grouping column to break
+	 * down; otherwise -1.
+	 */
+	public int subtotalColumn() {
+		if (!subtotals || !isGrouped())
+			return -1;
+		int first = -1;
+		for (int i = 0; i < columns.size(); i++)
+			if (!columns.get(i).isAggregated()) {
+				if (first >= 0)
+					return first;
+				first = i;
+			}
+		return -1;
 	}
 
 	/** Rules whose value is asked for at run time, in definition order. */
@@ -99,5 +123,21 @@ public class ReportSpec implements Serializable {
 
 	public void setSort(List<SortSpec> sort) {
 		this.sort = sort == null ? new ArrayList<SortSpec>() : sort;
+	}
+
+	public boolean isTotals() {
+		return totals;
+	}
+
+	public void setTotals(boolean totals) {
+		this.totals = totals;
+	}
+
+	public boolean isSubtotals() {
+		return subtotals;
+	}
+
+	public void setSubtotals(boolean subtotals) {
+		this.subtotals = subtotals;
 	}
 }

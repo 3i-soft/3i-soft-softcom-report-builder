@@ -44,6 +44,8 @@ public final class SpecJson {
 			if (c.isAggregated())
 				o.add("aggregate", c.getAggregate().name());
 			addIfNotEmpty(o, "label", c.getLabel());
+			if (c.getDatePart() != null)
+				o.add("datePart", c.getDatePart().name());
 			cols.add(o);
 		}
 		root.add("columns", cols);
@@ -53,6 +55,10 @@ public final class SpecJson {
 		for (SortSpec s : spec.getSort())
 			sort.add(Json.createObjectBuilder().add("column", s.getColumn()).add("desc", s.isDescending()));
 		root.add("sort", sort);
+		if (spec.isTotals())
+			root.add("totals", true);
+		if (spec.isSubtotals())
+			root.add("subtotals", true);
 		StringWriter sw = new StringWriter();
 		try (JsonWriter w = Json.createWriter(sw)) {
 			w.writeObject(root.build());
@@ -109,6 +115,7 @@ public final class SpecJson {
 			for (JsonObject c : objects(root, "columns")) {
 				ColumnSpec col = new ColumnSpec(string(c, "field"), enumValue(Aggregate.class, string(c, "aggregate"), Aggregate.NONE));
 				col.setLabel(string(c, "label"));
+				col.setDatePart(enumValue(DatePart.class, string(c, "datePart"), null));
 				columns.add(col);
 			}
 			spec.setColumns(columns);
@@ -118,6 +125,8 @@ public final class SpecJson {
 			for (JsonObject s : objects(root, "sort"))
 				sort.add(new SortSpec(s.getInt("column", 0), s.getBoolean("desc", false)));
 			spec.setSort(sort);
+			spec.setTotals(root.getBoolean("totals", false));
+			spec.setSubtotals(root.getBoolean("subtotals", false));
 			return spec;
 		} catch (ClassCastException | NullPointerException e) {
 			throw new ReportException(e, "rb.error.invalidDefinition", "unexpected structure");

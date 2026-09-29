@@ -185,6 +185,7 @@
 .rb-root .ui-button.rb-add:hover { border-style: solid !important; color: var(--rb-text) !important; background: var(--rb-soft) !important; }
 .rb-root .ui-button.ui-state-disabled { opacity: .45; }
 .rb-root .rb-adds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.rb-root .rb-options { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--rb-border); }
 
 /* sticky action bar */
 .rb-root .rb-actionbar {
@@ -279,6 +280,12 @@
 .rb-root .rb-table.ui-datatable tbody tr:last-child td { border-bottom: 0 !important; }
 .rb-root .rb-table.ui-datatable .rb-num { text-align: right; direction: ltr; font-variant-numeric: tabular-nums; font-weight: 600; }
 [dir="rtl"] .rb-root .rb-table.ui-datatable .rb-num { text-align: left; }
+/* subtotal and grand total rows */
+.rb-root .rb-table.ui-datatable tbody tr.rb-row-subtotal td { background: var(--rb-soft-2); font-weight: 700; color: var(--rb-text); }
+.rb-root .rb-table.ui-datatable tbody tr.rb-row-total td {
+	background: #e5e7eb; font-weight: 700; color: var(--rb-text);
+	border-top: 2px solid var(--rb-border-strong) !important;
+}
 
 /* messages */
 .rb-root .ui-messages > div { border-radius: 8px; }

@@ -2,6 +2,7 @@ package org.softcom.reportbuilder.web;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +16,7 @@ import javax.inject.Inject;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ReportResult;
 import org.softcom.reportbuilder.engine.ResultColumn;
+import org.softcom.reportbuilder.engine.ResultRow;
 import org.softcom.reportbuilder.engine.SpeedInfo;
 import org.softcom.reportbuilder.engine.SpeedRules;
 import org.softcom.reportbuilder.export.ReportFormatter;
@@ -45,6 +47,9 @@ public abstract class AbstractReportBean implements Serializable {
 	protected ReportResult result;
 	protected int first;
 	protected int pageSize = 50;
+	/** The grand total, computed with the first page and kept for the following pages. */
+	private ResultRow totals;
+	private ReportResult totalsOf;
 	/** Table statistics of the current data source, asked once per data source and view. */
 	private SpeedInfo speed;
 	private String speedKey;
@@ -87,9 +92,32 @@ public abstract class AbstractReportBean implements Serializable {
 		return ReportUi.text("rb.pageInfo", first + 1, first + result.getRows().size(), result.getDurationMs());
 	}
 
+	/** The rows of the result table: data and subtotal rows, then the grand total. */
+	public List<ResultRow> getTableRows() {
+		if (result == null)
+			return Collections.emptyList();
+		if (result != totalsOf) {
+			// the first page of a run carries the totals; the next pages keep them
+			if (result.getFirst() == 0)
+				totals = result.getTotals();
+			totalsOf = result;
+		}
+		if (totals == null)
+			return result.getDisplayRows();
+		List<ResultRow> rows = new ArrayList<>(result.getDisplayRows());
+		rows.add(totals);
+		return rows;
+	}
+
 	// ----------------------------------------------------------- formatting
 
 	public String format(Object row, ResultColumn column) {
+		if (row instanceof ResultRow) {
+			ResultRow r = (ResultRow) row;
+			if (r.getLabelColumn() == column.getIndex() && r.getLabelKey() != null)
+				return ReportUi.text(r.getLabelKey());
+			row = r.getValues();
+		}
 		if (!(row instanceof Object[]))
 			return "";
 		Object[] values = (Object[]) row;

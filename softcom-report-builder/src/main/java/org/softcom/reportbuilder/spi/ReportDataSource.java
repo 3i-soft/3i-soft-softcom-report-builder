@@ -57,6 +57,7 @@ public class ReportDataSource implements Serializable {
 	private String dayFunction;
 	private int queryTimeoutSeconds = 60;
 	private boolean automatic;
+	private final List<String[]> defaultConditions = new ArrayList<>();
 	private final Map<String, String[]> joinLabels = new LinkedHashMap<>();
 
 	public ReportDataSource(String key, Class<?> rootEntity) {
@@ -165,6 +166,26 @@ public class ReportDataSource implements Serializable {
 	public ReportDataSource queryTimeoutSeconds(int seconds) {
 		this.queryTimeoutSeconds = Math.max(1, seconds);
 		return this;
+	}
+
+	/**
+	 * A condition new reports on this data source start with, visible and
+	 * removable in the designer (e.g. "deleted is not true"). Not enforced:
+	 * use a forced filter or a row restriction for that.
+	 */
+	public ReportDataSource defaultCondition(String fieldPath, org.softcom.reportbuilder.spec.Operator operator) {
+		if (fieldPath == null || operator == null)
+			throw new IllegalArgumentException("field and operator are required");
+		defaultConditions.add(new String[] { fieldPath, operator.name() });
+		return this;
+	}
+
+	/** {field path, operator name} pairs, see {@link #defaultCondition}. */
+	public List<String[]> getDefaultConditions() {
+		List<String[]> copy = new ArrayList<>();
+		for (String[] c : defaultConditions)
+			copy.add(c.clone());
+		return copy;
 	}
 
 	/** Marks a data source discovered from the JPA metamodel (listed apart from the hand-written ones). */

@@ -9,7 +9,7 @@
 	<!-- The file name carries a revision (rb-N.css) because JSF resource URLs have no version and, in the Production
 	     stage, browsers keep a stylesheet for up to 7 days: after changing the styles, rename the file to rb-(N+1).css
 	     here and in the other snippet, or users keep the old styles with the new markup. -->
-	<h:outputStylesheet library="report-builder" name="rb-3.css" />
+	<h:outputStylesheet library="report-builder" name="rb-4.css" />
 	<div class="rb-root">
 	<h:form id="rbDesignerForm">
 		<f:event type="preRenderView" listener="#{rbDesigner.touch}" />
@@ -86,6 +86,11 @@
 								<f:selectItems value="#{rbDesigner.aggregateItems(col)}" />
 								<p:ajax process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" />
 							</p:selectOneMenu>
+							<p:selectOneMenu value="#{col.datePart}" rendered="#{rbDesigner.isDateColumn(col)}" title="#{rbbundle['rb.datePart']}"
+								autoWidth="false" styleClass="rb-w-sm">
+								<f:selectItem itemLabel="#{rbbundle['rb.datePart.none']}" itemValue="#{null}" />
+								<f:selectItems value="#{rbDesigner.datePartItems}" />
+							</p:selectOneMenu>
 							<p:inputText value="#{col.label}" placeholder="#{rbbundle['rb.columnLabel']}" maxlength="100" styleClass="form-control rb-input" />
 							<h:outputText value="#{rbDesigner.fieldHint(col.field)}" rendered="#{rbDesigner.fieldHint(col.field) ne null}" styleClass="rb-hint" />
 							<span class="rb-row-end">
@@ -103,6 +108,11 @@
 							update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" styleClass="rb-add" />
 						<p:commandButton value="#{rbbundle['rb.addRowCount']}" icon="fa fa-plus" action="#{rbDesigner.addRowCountColumn}" process="@form"
 							update="@(.rb-columns) @(.rb-sort) @(.rb-messages)" styleClass="rb-add" />
+					</div>
+					<div class="rb-options">
+						<p:selectBooleanCheckbox value="#{rbDesigner.totals}" itemLabel="#{rbbundle['rb.option.totals']}" />
+						<p:selectBooleanCheckbox value="#{rbDesigner.subtotals}" itemLabel="#{rbbundle['rb.option.subtotals']}"
+							rendered="#{rbDesigner.subtotalsPossible}" />
 					</div>
 				</h:panelGroup>
 

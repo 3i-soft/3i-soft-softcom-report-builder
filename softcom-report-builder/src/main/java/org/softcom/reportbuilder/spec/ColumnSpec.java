@@ -11,6 +11,8 @@ public class ColumnSpec implements Serializable {
 	private Aggregate aggregate = Aggregate.NONE;
 	/** Optional custom header; the field label is used when empty. */
 	private String label;
+	/** Date columns only: shown and grouped by day, month or year; null = as stored (DATE fields by day). */
+	private DatePart datePart;
 
 	public ColumnSpec() {
 	}
@@ -23,6 +25,7 @@ public class ColumnSpec implements Serializable {
 	public ColumnSpec copy() {
 		ColumnSpec c = new ColumnSpec(field, aggregate);
 		c.label = label;
+		c.datePart = datePart;
 		return c;
 	}
 
@@ -52,5 +55,13 @@ public class ColumnSpec implements Serializable {
 
 	public void setLabel(String label) {
 		this.label = label;
+	}
+
+	public DatePart getDatePart() {
+		return datePart;
+	}
+
+	public void setDatePart(DatePart datePart) {
+		this.datePart = datePart;
 	}
 }

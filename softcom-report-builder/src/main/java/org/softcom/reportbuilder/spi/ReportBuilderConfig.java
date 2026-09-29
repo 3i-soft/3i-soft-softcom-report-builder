@@ -21,6 +21,8 @@ public final class ReportBuilderConfig {
 
 	/** true (default): every JPA entity of the application is offered as a data source. */
 	public static final String AUTO_DATA_SOURCES = PREFIX + "AUTO_DATA_SOURCES";
+	/** true (default): new reports start with "deleted / cancelled is not true" on tables having such a flag. */
+	public static final String AUTO_DEFAULT_CONDITIONS = PREFIX + "AUTO_DEFAULT_CONDITIONS";
 	/** Comma separated entity names never offered (nor reachable through relations). */
 	public static final String AUTO_EXCLUDE = PREFIX + "AUTO_EXCLUDE";
 	/** Permission needed to see the automatic data sources; empty (default) = every report user. */
@@ -35,6 +37,14 @@ public final class ReportBuilderConfig {
 	public static final String QUERY_TIMEOUT_SECONDS = PREFIX + "QUERY_TIMEOUT_SECONDS";
 	/** Report queries that may run at the same time in this application. Default 6. */
 	public static final String MAX_CONCURRENT_QUERIES = PREFIX + "MAX_CONCURRENT_QUERIES";
+
+	/**
+	 * SQL of a column grouped by month, {@code ?} being the date. Default (PostgreSQL):
+	 * {@code CAST(DATE_TRUNC('month', ?) AS DATE)}.
+	 */
+	public static final String MONTH_SQL = PREFIX + "MONTH_SQL";
+	/** Same for years. Default: {@code CAST(DATE_TRUNC('year', ?) AS DATE)}. */
+	public static final String YEAR_SQL = PREFIX + "YEAR_SQL";
 
 	/** Remembered at start-up (see {@code ReportBuilderContextListener}), for threads without a JSF request. */
 	private static volatile ServletContext servletContext;

@@ -24,7 +24,8 @@
 						process="@this" update="@(.rb-result) @(.rb-messages)" styleClass="rb-btn" />
 				</div>
 			</div>
-			<p:dataTable value="#{rbBean.result.rows}" var="row" styleClass="rb-table" emptyMessage="#{rbbundle['rb.noRows']}">
+			<p:dataTable value="#{rbBean.tableRows}" var="row" styleClass="rb-table" rowStyleClass="#{row.styleClass}"
+				emptyMessage="#{rbbundle['rb.noRows']}">
 				<p:columns value="#{rbBean.result.columns}" var="col" styleClass="#{rbBean.columnStyle(col)}">
 					<f:facet name="header">#{rbBean.columnLabel(col)}</f:facet>
 					<h:outputText value="#{rbBean.format(row, col)}" />

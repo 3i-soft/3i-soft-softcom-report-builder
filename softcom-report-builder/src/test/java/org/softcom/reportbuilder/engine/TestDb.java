@@ -66,6 +66,11 @@ final class TestDb {
 			em.close();
 			if (!suppliersSeeded)
 				seedSuppliers(emf);
+			em = emf.createEntityManager();
+			boolean deletedSeeded = em.find(TSupplier.class, 3.0) != null;
+			em.close();
+			if (!deletedSeeded)
+				seedCodedSuppliers(emf);
 		}
 		return emf;
 	}
@@ -122,6 +127,17 @@ final class TestDb {
 		o2.getLines().add(l3);
 		em.persist(o1);
 		em.persist(o2);
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	/** A deleted supplier and city codes (default conditions, code names). */
+	private static void seedCodedSuppliers(EntityManagerFactory factory) {
+		EntityManager em = factory.createEntityManager();
+		em.getTransaction().begin();
+		em.persist(new TSupplier(3, "Supplier C (deleted)", true, "01"));
+		em.persist(new TSupplier(4, "Supplier D", false, "01"));
+		em.persist(new TSupplier(5, "Supplier E", false, "02"));
 		em.getTransaction().commit();
 		em.close();
 	}

@@ -1,8 +1,12 @@
 package org.softcom.reportbuilder.engine;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,6 +47,14 @@ public class ReportExecutor {
 		void begin(List<ResultColumn> columns);
 
 		void rows(List<Object[]> rows);
+
+		/** A subtotal row, written after the last row of its value; {@code labelColumn} shows the word "subtotal". */
+		default void subtotal(Object[] values, int labelColumn) {
+		}
+
+		/** The grand total row, written after the last row. */
+		default void total(Object[] values, int labelColumn) {
+		}
 
 		/** Called after the last row; {@code truncated} = more rows existed than the export limit. */
 		default void end(boolean truncated, int limit) {
@@ -89,12 +101,80 @@ public class ReportExecutor {
 		int start = Math.max(0, Math.min(first, MAX_FIRST_ROW));
 		long t0 = System.currentTimeMillis();
 		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, spec, run);
-		List<Object[]> rows = fetch(em, ds, built, start, size + 1, false);
-		boolean hasMore = rows.size() > size;
-		if (hasMore)
-			rows = new ArrayList<>(rows.subList(0, size));
-		return new ReportResult(built.getColumns(), rows, start, hasMore, System.currentTimeMillis() - t0);
+		List<Object[]> fetched = fetch(em, ds, built, start, size + 1, false);
+		boolean hasMore = fetched.size() > size;
+		List<Object[]> rows = hasMore ? new ArrayList<>(fetched.subList(0, size)) : fetched;
+		List<ResultRow> display = null;
+		int by = spec.subtotalColumn();
+		if (by >= 0 && !rows.isEmpty()) {
+			Map<Object, Object[]> subtotals = subtotals(em, ds, spec, run, rows, by);
+			int label = labelColumn(spec, by);
+			display = new ArrayList<>(rows.size() + 16);
+			for (int i = 0; i < rows.size(); i++) {
+				Object key = rows.get(i)[by];
+				display.add(ResultRow.data(rows.get(i)));
+				// the extra row fetched tells whether the last value goes on over the next page
+				if (i + 1 >= fetched.size() || !Objects.equals(key, fetched.get(i + 1)[by]))
+					display.add(new ResultRow(subtotals.get(key), ResultRow.Kind.SUBTOTAL, label));
+			}
+		}
+		ResultRow totals = spec.isTotals() && start == 0 ? totals(em, ds, spec, run) : null;
+		return new ReportResult(built.getColumns(), rows, display, totals, start, hasMore, System.currentTimeMillis() - t0);
 	}
+
+	/** The subtotals of the values of column {@code by} in {@code rows}, as full-width rows. */
+	private Map<Object, Object[]> subtotals(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run,
+			List<Object[]> rows, int by) {
+		Set<Object> keys = new LinkedHashSet<>();
+		for (Object[] r : rows)
+			keys.add(r[by]);
+		ReportQueryBuilder.Built q = ReportQueryBuilder.subtotals(em, ds, spec, run, keys);
+		Map<Object, Object[]> map = new HashMap<>();
+		for (Object[] r : fetch(em, ds, q, 0, keys.size() + 1, false)) {
+			Object[] full = spread(r, q.getPositions());
+			map.put(full[by], full);
+		}
+		// a value always has its subtotal row, even if the database returned nothing for it
+		for (Object k : keys)
+			if (!map.containsKey(k)) {
+				Object[] empty = new Object[spec.getColumns().size()];
+				empty[by] = k;
+				map.put(k, empty);
+			}
+		return map;
+	}
+
+	/** The grand total row, or null when no column has a total. */
+	private ResultRow totals(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run) {
+		ReportQueryBuilder.Built q = ReportQueryBuilder.totals(em, ds, spec, run);
+		if (q == null)
+			return null;
+		List<Object[]> r = fetch(em, ds, q, 0, 1, false);
+		Object[] values = r.isEmpty() ? new Object[spec.getColumns().size()] : spread(r.get(0), q.getPositions());
+		// the word "total" goes in the first column without a total
+		int label = -1;
+		for (int i = 0; i < q.getPositions().length && label < 0; i++)
+			if (q.getPositions()[i] < 0)
+				label = i;
+		return new ResultRow(values, ResultRow.Kind.TOTAL, label);
+	}
+
+	private static Object[] spread(Object[] tuple, int[] positions) {
+		Object[] full = new Object[positions.length];
+		for (int i = 0; i < positions.length; i++)
+			if (positions[i] >= 0)
+				full[i] = tuple[positions[i]];
+		return full;
+	}
+
+	/** The word "subtotal" goes in the second grouping column (the first one shows the value). */
+	static int labelColumn(ReportSpec spec, int by) {
+		for (int i = 0; i < spec.getColumns().size(); i++)
+			if (i != by && !spec.getColumns().get(i).isAggregated())
+				return i;
+		return -1;
+	}
+
 
 	/** Streams up to {@code maxRows} rows (capped by the data source) in chunks. Returns the number of rows. */
 	public int export(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run, int maxRows,
@@ -109,6 +189,10 @@ public class ReportExecutor {
 		int limit = Math.max(1, Math.min(maxRows <= 0 ? ds.getMaxExportRows() : maxRows, ds.getMaxExportRows()));
 		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, spec, run);
 		sink.begin(built.getColumns());
+		int by = spec.subtotalColumn();
+		int label = by < 0 ? -1 : labelColumn(spec, by);
+		// the subtotal of a chunk's last value is written once the next chunk shows the value has ended
+		Object[] pendingSubtotal = null;
 		int total = 0;
 		boolean truncated = false;
 		while (total < limit) {
@@ -122,10 +206,33 @@ public class ReportExecutor {
 			}
 			if (rows.isEmpty())
 				break;
-			sink.rows(rows);
+			if (by < 0) {
+				sink.rows(rows);
+			} else {
+				if (pendingSubtotal != null && !Objects.equals(pendingSubtotal[by], rows.get(0)[by]))
+					sink.subtotal(pendingSubtotal, label);
+				Map<Object, Object[]> subtotals = subtotals(em, ds, spec, run, rows, by);
+				int from = 0;
+				for (int i = 0; i + 1 < rows.size(); i++)
+					if (!Objects.equals(rows.get(i)[by], rows.get(i + 1)[by])) {
+						sink.rows(rows.subList(from, i + 1));
+						sink.subtotal(subtotals.get(rows.get(i)[by]), label);
+						from = i + 1;
+					}
+				sink.rows(rows.subList(from, rows.size()));
+				pendingSubtotal = subtotals.get(rows.get(rows.size() - 1)[by]);
+			}
 			total += rows.size();
 			if (rows.size() < chunk || truncated)
 				break;
+		}
+		// a value cut by the export limit gets no subtotal (it would not match its visible rows)
+		if (pendingSubtotal != null && !truncated)
+			sink.subtotal(pendingSubtotal, label);
+		if (spec.isTotals() && total > 0) {
+			ResultRow t = totals(em, ds, spec, run);
+			if (t != null)
+				sink.total(t.getValues(), t.getLabelColumn());
 		}
 		sink.end(truncated, limit);
 		return total;

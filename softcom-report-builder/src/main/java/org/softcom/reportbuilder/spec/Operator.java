@@ -5,7 +5,9 @@ import org.softcom.reportbuilder.spi.FieldType;
 public enum Operator {
 	EQ(1), NE(1), GT(1), GE(1), LT(1), LE(1), BETWEEN(2), IN(-1), NOT_IN(-1),
 	CONTAINS(1), NOT_CONTAINS(1), STARTS_WITH(1), ENDS_WITH(1),
-	IS_NULL(0), IS_NOT_NULL(0), IS_TRUE(0), IS_FALSE(0);
+	IS_NULL(0), IS_NOT_NULL(0), IS_TRUE(0), IS_FALSE(0),
+	/** false or empty: "not deleted" also for rows stored before the flag existed (NULL) */
+	IS_NOT_TRUE(0);
 
 	/** Number of values: 0, 1, 2 or -1 for a list. */
 	private final int arity;
@@ -41,6 +43,7 @@ public enum Operator {
 			return type == FieldType.STRING;
 		case IS_TRUE:
 		case IS_FALSE:
+		case IS_NOT_TRUE:
 			return type == FieldType.BOOLEAN;
 		default:
 			return false;

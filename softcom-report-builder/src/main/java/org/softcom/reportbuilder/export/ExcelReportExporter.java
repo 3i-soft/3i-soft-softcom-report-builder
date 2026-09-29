@@ -21,6 +21,7 @@ import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.softcom.reportbuilder.engine.ReportExecutor;
 import org.softcom.reportbuilder.engine.ResultColumn;
+import org.softcom.reportbuilder.spec.DatePart;
 import org.softcom.reportbuilder.spi.FieldType;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 
@@ -40,6 +41,9 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 	private final SXSSFWorkbook workbook = new SXSSFWorkbook(WINDOW);
 	private final Sheet sheet;
 	private final List<CellStyle> styles = new ArrayList<>();
+	/** Bold copies of {@link #styles} for subtotal and total rows. */
+	private final List<CellStyle> boldStyles = new ArrayList<>();
+	private CellStyle boldText;
 	private List<ResultColumn> columns;
 	private int nextRow;
 	private boolean truncated;
@@ -68,16 +72,26 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 			cell.setCellStyle(header);
 			sheet.setColumnWidth(c.getIndex(), 20 * 256);
 			CellStyle style = workbook.createCellStyle();
+			CellStyle boldStyle = workbook.createCellStyle();
+			boldStyle.setFont(bold);
 			String pattern = excelPattern(c);
-			if (pattern != null)
+			if (pattern != null) {
 				style.setDataFormat(df.getFormat(pattern));
+				boldStyle.setDataFormat(df.getFormat(pattern));
+			}
 			styles.add(style);
+			boldStyles.add(boldStyle);
 		}
+		boldText = header;
 		sheet.createFreezePane(0, 1);
 	}
 
 	private static String excelPattern(ResultColumn c) {
 		FieldType t = c.getType();
+		if (c.getDatePart() == DatePart.MONTH)
+			return "yyyy-mm";
+		if (c.getDatePart() == DatePart.YEAR)
+			return "yyyy";
 		if (t == FieldType.DATE)
 			return "yyyy-mm-dd";
 		if (t == FieldType.DATETIME)
@@ -91,24 +105,55 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 
 	@Override
 	public void rows(List<Object[]> rows) {
-		for (Object[] values : rows) {
-			Row row = sheet.createRow(nextRow++);
-			for (ResultColumn c : columns) {
-				Object v = values[c.getIndex()];
-				if (v == null)
-					continue;
+		for (Object[] values : rows)
+			write(values, -1, null, styles);
+	}
+
+	@Override
+	public void subtotal(Object[] values, int labelColumn) {
+		write(values, labelColumn, "rb.subtotal", boldStyles);
+	}
+
+	@Override
+	public void total(Object[] values, int labelColumn) {
+		write(values, labelColumn, "rb.total", boldStyles);
+	}
+
+	private void write(Object[] values, int labelColumn, String labelKey, List<CellStyle> cellStyles) {
+		Row row = sheet.createRow(nextRow++);
+		for (ResultColumn c : columns) {
+			if (c.getIndex() == labelColumn) {
 				Cell cell = row.createCell(c.getIndex());
-				if (v instanceof Number) {
-					cell.setCellValue(v instanceof BigDecimal ? ((BigDecimal) v).doubleValue() : ((Number) v).doubleValue());
-					cell.setCellStyle(styles.get(c.getIndex()));
-				} else if (v instanceof Date) {
-					cell.setCellValue((Date) v);
-					cell.setCellStyle(styles.get(c.getIndex()));
-				} else {
-					String text = ReportFormatter.format(v, c, ds, locale);
-					cell.setCellValue(text.length() > MAX_CELL_TEXT ? text.substring(0, MAX_CELL_TEXT) : text);
-				}
+				cell.setCellValue(text(labelKey, labelKey));
+				cell.setCellStyle(boldText);
+				continue;
 			}
+			Object v = values == null ? null : values[c.getIndex()];
+			if (v == null)
+				continue;
+			Cell cell = row.createCell(c.getIndex());
+			if (v instanceof Number) {
+				cell.setCellValue(v instanceof BigDecimal ? ((BigDecimal) v).doubleValue() : ((Number) v).doubleValue());
+				cell.setCellStyle(cellStyles.get(c.getIndex()));
+			} else if (v instanceof Date) {
+				cell.setCellValue((Date) v);
+				cell.setCellStyle(cellStyles.get(c.getIndex()));
+			} else {
+				String text = ReportFormatter.format(v, c, ds, locale);
+				cell.setCellValue(text.length() > MAX_CELL_TEXT ? text.substring(0, MAX_CELL_TEXT) : text);
+				if (cellStyles == boldStyles)
+					cell.setCellStyle(boldText);
+			}
+		}
+	}
+
+	/** A text of the library's bundle in the export's language. */
+	private String text(String key, String fallback, Object... args) {
+		try {
+			return MessageFormat.format(ResourceBundle.getBundle("resources.rbbundle", locale == null ? new Locale("ar") : locale)
+					.getString(key), args);
+		} catch (MissingResourceException e) {
+			return fallback;
 		}
 	}
 
@@ -118,13 +163,7 @@ public class ExcelReportExporter implements ReportExecutor.RowSink {
 		this.truncated = cut;
 		if (!cut)
 			return;
-		String note;
-		try {
-			note = MessageFormat.format(ResourceBundle.getBundle("resources.rbbundle", locale == null ? new Locale("ar") : locale)
-					.getString("rb.export.truncated"), limit);
-		} catch (MissingResourceException e) {
-			note = "Truncated: only the first " + limit + " rows were exported";
-		}
+		String note = text("rb.export.truncated", "Truncated: only the first " + limit + " rows were exported", limit);
 		Row row = sheet.createRow(nextRow++);
 		row.createCell(0).setCellValue(note);
 	}

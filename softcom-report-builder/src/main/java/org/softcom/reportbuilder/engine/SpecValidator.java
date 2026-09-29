@@ -62,6 +62,8 @@ public final class SpecValidator {
 				throw new ReportException("rb.error.aggregateNotAllowed", agg, f.getPath());
 			if (grouped && agg == Aggregate.NONE && !f.isGroupable())
 				throw new ReportException("rb.error.notGroupable", f.getPath());
+			if (c.getDatePart() != null && (agg != Aggregate.NONE || !f.getType().isTemporal()))
+				throw new ReportException("rb.error.datePartNotAllowed", f.getPath());
 		}
 		if (spec.getFilter() != null)
 			validateFilter(spec.getFilter(), ds, requireValues);
@@ -206,6 +208,8 @@ public final class SpecValidator {
 		case AVG:
 			return FieldType.DOUBLE;
 		default:
+			if (c.getDatePart() != null)
+				return FieldType.DATE;
 			return f == null ? FieldType.LONG : f.getType();
 		}
 	}

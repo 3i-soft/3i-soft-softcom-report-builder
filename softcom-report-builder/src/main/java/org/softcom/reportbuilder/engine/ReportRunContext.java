@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Predicate;
 
+import org.softcom.reportbuilder.spi.RowRestrictions;
+
 /** Who runs the report and any extra values the host passes to forced filters. */
 public class ReportRunContext implements Serializable {
 
@@ -14,8 +16,16 @@ public class ReportRunContext implements Serializable {
 	private final String user;
 	private final transient Predicate<String> roleCheck;
 	private final Map<String, Object> attributes;
+	private final RowRestrictions restrictions;
 
 	public ReportRunContext(String user, Predicate<String> roleCheck, Map<String, Object> attributes) {
+		this(user, roleCheck, attributes, null);
+	}
+
+	/** @param restrictions the rows the user may see (from the application's ReportRowFilter beans), or null */
+	public ReportRunContext(String user, Predicate<String> roleCheck, Map<String, Object> attributes,
+			RowRestrictions restrictions) {
+		this.restrictions = restrictions;
 		this.user = user;
 		this.roleCheck = roleCheck;
 		this.attributes = attributes == null ? Collections.<String, Object>emptyMap()
@@ -36,5 +46,9 @@ public class ReportRunContext implements Serializable {
 
 	public Map<String, Object> getAttributes() {
 		return attributes;
+	}
+
+	public RowRestrictions getRestrictions() {
+		return restrictions;
 	}
 }

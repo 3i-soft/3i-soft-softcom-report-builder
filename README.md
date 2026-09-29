@@ -194,6 +194,39 @@ work on timestamp columns and still use an index. DATETIME fields do the same wh
 | `softcom.reportbuilder.QUERY_TIMEOUT_SECONDS` | `30` | query timeout of the automatic data sources |
 | `softcom.reportbuilder.MAX_CONCURRENT_QUERIES` | `6` | report queries running at the same time in the application (a report waits up to 15 s for a slot, before touching the database) |
 
+## Row restrictions (written once per application)
+
+Automatic data sources show every row. An application limits what each user may see with **one** CDI bean - not
+per report - that applies to every data source (automatic and hand-written), in preview, run and Excel export:
+
+```java
+@ApplicationScoped
+public class GwReportRowFilter implements ReportRowFilter {
+    @EJB private WarehouseFacade warehouseFacade;
+
+    @Override
+    public void restrict(RowRestrictions r) {
+        if (noLoggedUser()) { r.denyAll(); return; }
+        List<Double> ids = ...ids of warehouseFacade.getUserWarehouses()...;
+        r.allowOnly(Warehouse.class, ids)                            // warehouses and everything linked to them
+         .allowOnlyValues(ids, "warehouse_id", "towarehouse_id");   // copied id columns (invoice lines)
+    }
+}
+```
+
+- `allowOnly(Entity.class, ids)`: rows of that entity, and rows linked to it through many-to-one / one-to-one
+  relations, are limited to those ids. Only the nearest links count, at most two relations away: an invoice by its
+  warehouse or destination warehouse (either may be allowed), a payment through its invoice. A row whose links are all
+  empty is not shown; tables not linked at all (items, suppliers) are not limited.
+- `allowOnlyValues(values, "attr", ...)`: rows having one of these simple columns are limited to those where one of
+  them is in the list.
+- `where(Entity.class, ctx -> predicates)`: any other condition for data sources rooted at that entity.
+- `denyAll()`: nothing (e.g. no logged-in user). An exception in the bean stops the report.
+- In a collection data source (invoice -> lines) the invoice decides; the lines' own columns are only used when no
+  rule concerns the invoice. Restrictions are ANDed around the report's conditions, so a user's OR cannot widen them.
+
+generalWarehouse's `GwReportRowFilter` limits every report to the user's warehouses this way.
+
 ## Speed rules
 
 For each data source the library asks PostgreSQL's catalog (never the tables themselves; cached 6 hours) for the

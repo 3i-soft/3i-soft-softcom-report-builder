@@ -127,6 +127,8 @@ public final class ReportQueryBuilder {
 					if (p != null)
 						where.add(p);
 		}
+		// the application's row restrictions (e.g. the user's warehouses), for every data source
+		where.addAll(RowRestrictionApplier.predicates(em, ctx, ds, run == null ? null : run.getRestrictions()));
 		Predicate user = new PredicateBuilder(cb, ctx, ds).build(spec.getFilter());
 		if (user != null)
 			where.add(user);

@@ -30,6 +30,8 @@ import org.softcom.reportbuilder.model.ReportRunLog;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spi.ReportAttributesProvider;
 import org.softcom.reportbuilder.spi.ReportDataSource;
+import org.softcom.reportbuilder.spi.ReportRowFilter;
+import org.softcom.reportbuilder.spi.RowRestrictions;
 
 /**
  * Entry point used by the JSF beans: permission checks, execution on the host
@@ -63,6 +65,10 @@ public class ReportService {
 	@Inject
 	@Any
 	private Instance<ReportAttributesProvider> attributeProviders;
+
+	@Inject
+	@Any
+	private Instance<ReportRowFilter> rowFilters;
 
 	private final ReportExecutor executor = new ReportExecutor();
 
@@ -206,7 +212,11 @@ public class ReportService {
 				attributes.putAll(a);
 		}
 		final ReportSecurity sec = security;
-		return new ReportRunContext(sec.getCurrentUser(), sec::hasPermission, attributes);
+		// an exception from a row filter stops the report: nothing is ever shown unrestricted
+		RowRestrictions restrictions = new RowRestrictions(sec.getCurrentUser(), sec::hasPermission, attributes);
+		for (ReportRowFilter f : rowFilters)
+			f.restrict(restrictions);
+		return new ReportRunContext(sec.getCurrentUser(), sec::hasPermission, attributes, restrictions);
 	}
 
 	/** Result of an Excel export. */

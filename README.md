@@ -35,7 +35,7 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
    <dependency>
      <groupId>org.softcom</groupId>
      <artifactId>softcom-report-builder</artifactId>
-     <version>1.0.0</version>
+     <version>1.2.0</version>
    </dependency>
    ```
 

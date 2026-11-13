@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.softcom</groupId>
 	<artifactId>softcom-report-builder</artifactId>
-	<version>1.0.0</version>
+	<version>1.2.0</version>
 	<name>softcom-report-builder</name>
 	<description>Runtime (user-defined) report builder for Java EE 7 / JPA 2.1 applications: users pick a data source,
 		columns, AND/OR conditions, grouping and totals; the engine turns the definition into a safe JPA Criteria query

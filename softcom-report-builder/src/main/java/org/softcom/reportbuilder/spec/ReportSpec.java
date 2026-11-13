@@ -25,6 +25,8 @@ public class ReportSpec implements Serializable {
 	private boolean totals;
 	/** Grouped reports with two or more grouping columns: a subtotal row after each value of the first one. */
 	private boolean subtotals;
+	/** Tables linked by equal columns (see {@link LinkSpec}), in order: a link may use the fields of earlier ones. */
+	private List<LinkSpec> links = new ArrayList<>();
 
 	public ReportSpec copy() {
 		ReportSpec s = new ReportSpec();
@@ -37,6 +39,8 @@ public class ReportSpec implements Serializable {
 			s.sort.add(o.copy());
 		s.totals = totals;
 		s.subtotals = subtotals;
+		for (LinkSpec l : links)
+			s.links.add(l.copy());
 		return s;
 	}
 
@@ -139,5 +143,22 @@ public class ReportSpec implements Serializable {
 
 	public void setSubtotals(boolean subtotals) {
 		this.subtotals = subtotals;
+	}
+
+	public List<LinkSpec> getLinks() {
+		return links;
+	}
+
+	public void setLinks(List<LinkSpec> links) {
+		this.links = links == null ? new ArrayList<LinkSpec>() : links;
+	}
+
+	/** The link with this alias, or null. */
+	public LinkSpec findLink(String alias) {
+		if (alias != null)
+			for (LinkSpec l : links)
+				if (alias.equals(l.getAlias()))
+					return l;
+		return null;
 	}
 }

@@ -29,6 +29,7 @@ import org.softcom.reportbuilder.service.ReportSecurity;
 import org.softcom.reportbuilder.service.ReportService;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spi.FieldType;
+import org.softcom.reportbuilder.spec.LinkSpec;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 import org.softcom.reportbuilder.spi.ReportField;
 
@@ -57,6 +58,37 @@ public abstract class AbstractReportBean implements Serializable {
 	/** Table statistics of the current data source, asked once per data source and view. */
 	private SpeedInfo speed;
 	private String speedKey;
+
+	/** The last data source made with links, and what it was made from (the pages ask for it many times). */
+	private transient ReportDataSource linkedView;
+	private String linkedViewSignature;
+
+	/**
+	 * The data source with the report's linked tables, for field lists, labels
+	 * and formats. Lenient: links still being designed are left out. Running
+	 * a report resolves it again on the server, with the permission checks.
+	 */
+	protected ReportDataSource withLinks(String dataSourceKey, List<LinkSpec> links) {
+		ReportDataSource ds = catalog.get(dataSourceKey);
+		if (ds == null || links == null || links.isEmpty())
+			return ds;
+		StringBuilder sig = new StringBuilder(dataSourceKey);
+		for (LinkSpec l : links) {
+			sig.append('|').append(l.getAlias()).append('=').append(l.getDataSource());
+			for (LinkSpec.Pair p : l.getOn())
+				sig.append(',').append(p.getLeft()).append('~').append(p.getRight());
+		}
+		String signature = sig.toString();
+		if (linkedView == null || !signature.equals(linkedViewSignature)) {
+			List<LinkSpec> allowed = new ArrayList<>();
+			for (LinkSpec l : links)
+				if (ReportCatalog.isAllowed(catalog.get(l.getDataSource()), security))
+					allowed.add(l);
+			linkedView = ReportCatalog.withLinks(ds, allowed, catalog::get, true);
+			linkedViewSignature = signature;
+		}
+		return linkedView;
+	}
 
 	/** The data source currently being edited or run, may be null. */
 	public abstract ReportDataSource getDataSource();
@@ -167,22 +199,28 @@ public abstract class AbstractReportBean implements Serializable {
 	 * under it (automatic data sources can have a hundred fields).
 	 */
 	protected List<SelectItem> fieldItems(boolean filterableOnly) {
-		List<SelectItem> items = new ArrayList<>();
 		ReportDataSource ds = getDataSource();
-		if (ds == null)
-			return items;
-		SpeedInfo sp = getSpeed();
+		// fields reached through a collection only make sense as conditions ("has a line where ...")
+		return ds == null ? new ArrayList<SelectItem>()
+				: fieldItems(ds, filterableOnly, f -> filterableOnly || !f.isViaCollection(), getSpeed());
+	}
+
+	/** The fields of {@code ds} that {@code include} accepts, as menu items grouped like {@link #fieldItems(boolean)}. */
+	protected List<SelectItem> fieldItems(ReportDataSource ds, boolean filterableOnly,
+			java.util.function.Predicate<ReportField> include, SpeedInfo sp) {
+		List<SelectItem> items = new ArrayList<>();
 		Map<String, List<SelectItem>> groups = new LinkedHashMap<>();
 		for (ReportField f : ds.getFields(filterableOnly)) {
-			// fields reached through a collection only make sense as conditions ("has a line where ...")
-			if (!filterableOnly && f.isViaCollection())
+			if (!include.test(f))
 				continue;
-			String label = f.getLabel(getLocale());
+			// within the group of its table, a linked field shows its own label (the table is the group)
+			String label = f.isLinked() ? f.getLinkedField().getLabel(getLocale()) : f.getLabel(getLocale());
 			if (filterableOnly && f.hasLookup())
 				label = label + " " + ReportUi.text("rb.lookupMark");
 			SelectItem item = new SelectItem(f.getPath(), sp.isFast(f.getPath()) ? label + " " + FAST_MARK : label);
 			String join = f.isViaCollection() ? f.getPath().substring(0, f.getPath().lastIndexOf('.')) : f.getJoinPath();
-			String groupLabel = join == null || !ds.isAutomatic() ? null : ds.getJoinLabel(join, getLocale());
+			String groupLabel = f.isLinked() ? linkGroupLabel(ds, f.getLinkAlias())
+					: join == null || !ds.isAutomatic() ? null : ds.getJoinLabel(join, getLocale());
 			if (groupLabel != null && f.isViaCollection())
 				groupLabel = ReportUi.text("rb.group.contains", groupLabel);
 			if (groupLabel == null) {
@@ -200,6 +238,13 @@ public abstract class AbstractReportBean implements Serializable {
 			items.add(group);
 		}
 		return items;
+	}
+
+	/** The group of a linked table's fields in the field lists, e.g. "Linked 1: Item statistics". */
+	protected String linkGroupLabel(ReportDataSource ds, String alias) {
+		ReportDataSource.Link l = ds.getLinks().get(alias);
+		// the link's number keeps two links to the same table apart
+		return ReportUi.text("rb.group.linked", l == null ? alias : l.getTarget().getLabel(getLocale()), alias.substring(1));
 	}
 
 	/** Marks fields a condition can use an index on. */
@@ -281,7 +326,8 @@ public abstract class AbstractReportBean implements Serializable {
 			return ids;
 		try {
 			Map<String, String> names = namesOf(field.toString());
-			for (LookupQueries.Item i : service.lookup(ds.getKey(), field.toString(), query)) {
+			String[] source = lookupSource(ds, field.toString());
+			for (LookupQueries.Item i : service.lookup(source[0], source[1], query)) {
 				names.put(i.getId(), i.getLabel());
 				ids.add(i.getId());
 			}
@@ -300,7 +346,8 @@ public abstract class AbstractReportBean implements Serializable {
 		String name = names.get(key);
 		if (name == null && getDataSource() != null) {
 			try {
-				names.putAll(service.lookupNames(getDataSource().getKey(), field, Collections.singletonList(id)));
+				String[] source = lookupSource(getDataSource(), field);
+				names.putAll(service.lookupNames(source[0], source[1], Collections.singletonList(id)));
 			} catch (RuntimeException e) {
 				// the id is shown
 			}
@@ -309,6 +356,21 @@ public abstract class AbstractReportBean implements Serializable {
 				names.put(key, id);
 		}
 		return name == null ? id : name;
+	}
+
+	/**
+	 * {data source key, field path} the pick list of a field is searched in:
+	 * a linked table's field ({@code l1:item.id}) is searched in the linked
+	 * data source, with the same permission check as if it were reported on.
+	 */
+	static String[] lookupSource(ReportDataSource ds, String field) {
+		ReportField f = ds.getField(field);
+		if (f != null && f.isLinked()) {
+			ReportDataSource.Link l = ds.getLinks().get(f.getLinkAlias());
+			if (l != null)
+				return new String[] { l.getTarget().getKey(), f.getLinkedField().getPath() };
+		}
+		return new String[] { ds.getKey(), field };
 	}
 
 	private Map<String, String> namesOf(String field) {

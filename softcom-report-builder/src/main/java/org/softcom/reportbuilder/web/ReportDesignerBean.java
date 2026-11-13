@@ -17,13 +17,16 @@ import javax.inject.Named;
 import org.softcom.reportbuilder.engine.ReportException;
 import org.softcom.reportbuilder.engine.SpeedRules;
 import org.softcom.reportbuilder.engine.SpecValidator;
+import org.softcom.reportbuilder.engine.SpeedInfo;
 import org.softcom.reportbuilder.model.ReportDefinition;
+import org.softcom.reportbuilder.service.ReportCatalog;
 import org.softcom.reportbuilder.service.ReportDefinitionFacade;
 import org.softcom.reportbuilder.service.ReportUsers;
 import org.softcom.reportbuilder.spec.Aggregate;
 import org.softcom.reportbuilder.spec.ColumnSpec;
 import org.softcom.reportbuilder.spec.DatePart;
 import org.softcom.reportbuilder.spec.FilterNode;
+import org.softcom.reportbuilder.spec.LinkSpec;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spec.SortSpec;
@@ -59,6 +62,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 	private List<String> sharedUsers = new ArrayList<>();
 	private String folder;
 	private String dataSourceKey;
+	/** Tables linked by equal columns, edited in place by the page. */
+	private List<LinkSpec> links = new ArrayList<>();
 	private List<ColumnSpec> columns = new ArrayList<>();
 	private FilterNode.Logic topLogic = FilterNode.Logic.AND;
 	private List<GroupEditor> groups = new ArrayList<>();
@@ -88,7 +93,10 @@ public class ReportDesignerBean extends AbstractReportBean {
 	private void load(Long id) {
 		ReportDefinition d = definitions.findVisible(id);
 		ReportSpec spec = definitions.spec(d);
-		ReportDataSource ds = catalog.get(spec.getDataSource());
+		List<LinkSpec> loadedLinks = new ArrayList<>();
+		for (LinkSpec l : spec.getLinks())
+			loadedLinks.add(l.copy());
+		ReportDataSource ds = withLinks(spec.getDataSource(), loadedLinks);
 		// conditions first: they are the part that can be too complex for the designer
 		List<GroupEditor> loadedGroups = new ArrayList<>();
 		FilterNode.Logic loadedLogic = FilterNode.Logic.AND;
@@ -124,6 +132,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 		sharedUsers = editable ? d.getSharedUserList() : new ArrayList<String>();
 		folder = d.getFolder();
 		dataSourceKey = spec.getDataSource();
+		links = loadedLinks;
 		columns = new ArrayList<>();
 		for (ColumnSpec c : spec.getColumns())
 			columns.add(c.copy());
@@ -153,6 +162,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 	public ReportSpec buildSpec() {
 		ReportSpec spec = new ReportSpec();
 		spec.setDataSource(dataSourceKey);
+		for (LinkSpec l : links)
+			spec.getLinks().add(l.copy());
 		// designer row index -> spec column index (rows without a field are skipped)
 		java.util.Map<Integer, Integer> columnIndex = new java.util.HashMap<>();
 		for (int i = 0; i < columns.size(); i++) {
@@ -191,6 +202,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 	// ------------------------------------------------------------- actions
 
 	public void onDataSourceChange() {
+		links = new ArrayList<>();
 		columns = new ArrayList<>();
 		groups = new ArrayList<>();
 		sorts = new ArrayList<>();
@@ -218,6 +230,109 @@ public class ReportDesignerBean extends AbstractReportBean {
 			}
 		if (!g.getRules().isEmpty())
 			groups.add(g);
+	}
+
+	// --------------------------------------------------------- linked tables
+
+	/** Links a table: the next free alias (l1, l2...), with one empty pair of columns to fill. */
+	public void addLink() {
+		if (links.size() >= SpecValidator.MAX_LINKS)
+			return;
+		String alias = null;
+		for (int i = 1; i <= 9 && alias == null; i++)
+			if (findLink("l" + i) == null)
+				alias = "l" + i;
+		LinkSpec l = new LinkSpec(alias, null);
+		l.getOn().add(new LinkSpec.Pair());
+		links.add(l);
+	}
+
+	/** Removes a link and whatever uses its fields: columns, conditions and the pairs of later links. */
+	public void removeLink(LinkSpec link) {
+		dropLinkFields(link.getAlias());
+		links.remove(link);
+		result = null;
+	}
+
+	/** Another table: the columns, conditions and pairs of the previous one no longer apply. */
+	public void onLinkDataSourceChange(LinkSpec link) {
+		dropLinkFields(link.getAlias());
+		link.getOn().clear();
+		link.getOn().add(new LinkSpec.Pair());
+		result = null;
+	}
+
+	public void addLinkPair(LinkSpec link) {
+		if (link.getOn().size() < SpecValidator.MAX_LINK_PAIRS)
+			link.getOn().add(new LinkSpec.Pair());
+	}
+
+	public void removeLinkPair(LinkSpec link, LinkSpec.Pair pair) {
+		link.getOn().remove(pair);
+		if (link.getOn().isEmpty())
+			link.getOn().add(new LinkSpec.Pair());
+	}
+
+	private LinkSpec findLink(String alias) {
+		for (LinkSpec l : links)
+			if (alias.equals(l.getAlias()))
+				return l;
+		return null;
+	}
+
+	/** Takes the fields of a link out of the columns, conditions and later links' pairs. */
+	private void dropLinkFields(String alias) {
+		for (int i = columns.size() - 1; i >= 0; i--)
+			if (alias.equals(LinkSpec.aliasOf(columns.get(i).getField())))
+				removeColumn(i);
+		for (GroupEditor g : new ArrayList<>(groups))
+			for (RuleEditor r : new ArrayList<>(g.getRules()))
+				if (alias.equals(LinkSpec.aliasOf(r.getField())))
+					removeRule(g, r);
+		for (LinkSpec l : links)
+			for (LinkSpec.Pair p : l.getOn())
+				if (alias.equals(LinkSpec.aliasOf(p.getLeft())))
+					p.setLeft(null);
+	}
+
+	/** Tables a link can use: those the user may report on. */
+	public List<SelectItem> getLinkDataSourceItems() {
+		return getDataSourceItems();
+	}
+
+	/** Left side of a pair: the report's own fields and those of earlier links. */
+	public List<SelectItem> linkLeftItems(LinkSpec link) {
+		ReportDataSource ds = getDataSource();
+		if (ds == null)
+			return new ArrayList<>();
+		java.util.Set<String> earlier = new java.util.HashSet<>();
+		for (LinkSpec l : links) {
+			if (l == link)
+				break;
+			earlier.add(l.getAlias());
+		}
+		return fieldItems(ds, true, f -> !f.isViaCollection() && (!f.isLinked() || earlier.contains(f.getLinkAlias())),
+				getSpeed());
+	}
+
+	/** Right side of a pair: the fields of the linked table. */
+	public List<SelectItem> linkRightItems(LinkSpec link) {
+		ReportDataSource target = link.getDataSource() == null ? null : catalog.get(link.getDataSource());
+		if (target == null || !ReportCatalog.isAllowed(target, security))
+			return new ArrayList<>();
+		return fieldItems(target, true, f -> !f.isViaCollection(), SpeedInfo.UNKNOWN);
+	}
+
+	public boolean isCanAddLink() {
+		return links.size() < SpecValidator.MAX_LINKS;
+	}
+
+	public boolean canAddLinkPair(LinkSpec link) {
+		return link.getOn().size() < SpecValidator.MAX_LINK_PAIRS;
+	}
+
+	public List<LinkSpec> getLinks() {
+		return links;
 	}
 
 	public void addColumn() {
@@ -415,6 +530,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 		sharedUsers = new ArrayList<>();
 		folder = null;
 		dataSourceKey = null;
+		links = new ArrayList<>();
 		columns = new ArrayList<>();
 		groups = new ArrayList<>();
 		sorts = new ArrayList<>();
@@ -430,7 +546,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 		final ReportSpec spec = buildSpec();
 		final String title = name == null || name.trim().isEmpty() ? "report" : name;
 		try {
-			SpecValidator.validate(spec, catalog.get(dataSourceKey), true);
+			SpecValidator.validate(spec, catalog.resolve(spec, security), true);
 		} catch (RuntimeException e) {
 			ReportUi.error(e, getDataSource());
 			return;
@@ -443,7 +559,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 
 	@Override
 	public ReportDataSource getDataSource() {
-		return catalog.get(dataSourceKey);
+		return withLinks(dataSourceKey, links);
 	}
 
 	/** Hand-written data sources first, then the application's tables (automatic ones), each group by name. */

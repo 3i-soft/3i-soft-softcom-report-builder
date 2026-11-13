@@ -2,6 +2,7 @@ package org.softcom.reportbuilder.engine;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import javax.persistence.criteria.CriteriaBuilder;
@@ -29,6 +30,8 @@ class QueryContextImpl implements ReportQueryContext {
 	private final ReportRunContext run;
 	private final Map<String, From<?, ?>> joins = new HashMap<>();
 	private final Map<String, Expression<?>> fieldExpressions = new HashMap<>();
+	/** The contexts of the linked tables (a second FROM each), by alias. */
+	private final Map<String, QueryContextImpl> linked = new LinkedHashMap<>();
 
 	QueryContextImpl(CriteriaBuilder cb, CriteriaQuery<?> query, Root<?> root, ReportDataSource dataSource,
 			ReportRunContext run) {
@@ -83,11 +86,42 @@ class QueryContextImpl implements ReportQueryContext {
 		return (Path<T>) current;
 	}
 
+	/**
+	 * Adds a linked table to the query: its root as a second FROM (the pairs of
+	 * equal columns become WHERE conditions, see ReportQueryBuilder), with its
+	 * own joins and grain.
+	 */
+	QueryContextImpl link(String alias, ReportDataSource target) {
+		Root<?> r = query.from(target.getRootEntity());
+		QueryContextImpl c = new QueryContextImpl(cb, query, r, target, run);
+		if (target.getGrainPath() != null)
+			c.join(target.getGrainPath());
+		linked.put(alias, c);
+		return c;
+	}
+
+	/** The context of a linked table, by alias. */
+	QueryContextImpl linked(String alias) {
+		QueryContextImpl c = linked.get(alias);
+		if (c == null)
+			throw new ReportException("rb.error.invalidLink", alias);
+		return c;
+	}
+
+	Map<String, QueryContextImpl> getLinked() {
+		return linked;
+	}
+
+	ReportDataSource getDataSource() {
+		return dataSource;
+	}
+
 	/** The expression of a whitelisted field (its path, or its computed expression), built once per query. */
 	Expression<?> field(ReportField f) {
 		Expression<?> e = fieldExpressions.get(f.getPath());
 		if (e == null) {
-			e = f.isComputed() ? f.getExpression().build(this) : path(f.getPath());
+			e = f.isLinked() ? linked(f.getLinkAlias()).field(f.getLinkedField())
+					: f.isComputed() ? f.getExpression().build(this) : path(f.getPath());
 			fieldExpressions.put(f.getPath(), e);
 		}
 		return e;

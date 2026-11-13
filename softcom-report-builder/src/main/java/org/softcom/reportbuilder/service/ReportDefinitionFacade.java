@@ -113,9 +113,7 @@ public class ReportDefinitionFacade {
 		checkLength(input.getSharedRoles(), 1000);
 		checkLength(input.getSharedUsers(), 2000);
 		checkLength(input.getFolder() == null ? null : input.getFolder().trim(), 200);
-		ReportDataSource ds = catalog.get(spec.getDataSource());
-		if (!ReportCatalog.isAllowed(ds, security))
-			throw new ReportException("rb.error.unknownDataSource", spec.getDataSource());
+		ReportDataSource ds = catalog.resolve(spec, security);
 		SpecValidator.validate(spec, ds, false);
 		String json = SpecJson.toJson(spec);
 		if (json.length() > SpecJson.MAX_LENGTH)

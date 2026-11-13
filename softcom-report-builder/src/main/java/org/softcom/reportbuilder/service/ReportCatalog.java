@@ -12,6 +12,9 @@ import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
+import org.softcom.reportbuilder.engine.ReportException;
+import org.softcom.reportbuilder.spec.LinkSpec;
+import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 import org.softcom.reportbuilder.spi.ReportDataSourceProvider;
 
@@ -54,6 +57,56 @@ public class ReportCatalog implements Serializable {
 			if (isAllowed(ds, security))
 				list.add(ds);
 		return list;
+	}
+
+	/**
+	 * The data source of a report as its queries see it: with the tables it
+	 * links ({@link ReportDataSource#withLinks}). The user must be allowed to
+	 * use the data source and every linked one.
+	 *
+	 * @throws ReportException rb.error.unknownDataSource otherwise
+	 */
+	public ReportDataSource resolve(ReportSpec spec, ReportSecurity security) {
+		ReportDataSource ds = get(spec.getDataSource());
+		if (!isAllowed(ds, security))
+			throw new ReportException("rb.error.unknownDataSource", spec.getDataSource());
+		for (LinkSpec l : spec.getLinks())
+			if (!isAllowed(get(l.getDataSource()), security))
+				throw new ReportException("rb.error.unknownDataSource", l.getDataSource());
+		return withLinks(ds, spec.getLinks(), this::get, false);
+	}
+
+	/**
+	 * Adds a report's links to its data source.
+	 *
+	 * @param targets data sources by key
+	 * @param lenient true while designing: links without a (known) table and
+	 *                incomplete pairs are left out instead of failing, so the
+	 *                designer can list the fields of the links done so far
+	 */
+	public static ReportDataSource withLinks(ReportDataSource ds, List<LinkSpec> links,
+			java.util.function.Function<String, ReportDataSource> targets, boolean lenient) {
+		if (ds == null || links == null || links.isEmpty())
+			return ds;
+		List<ReportDataSource.Link> list = new ArrayList<>();
+		for (LinkSpec l : links) {
+			ReportDataSource target = l.getDataSource() == null ? null : targets.apply(l.getDataSource());
+			if (target == null || l.getAlias() == null || !l.getAlias().matches(LinkSpec.ALIAS_PATTERN)) {
+				if (lenient)
+					continue;
+				throw new ReportException("rb.error.invalidLink", l.getAlias());
+			}
+			List<String[]> pairs = new ArrayList<>();
+			for (LinkSpec.Pair p : l.getOn())
+				if (!lenient || p.isComplete())
+					pairs.add(new String[] { p.getLeft(), p.getRight() });
+			list.add(new ReportDataSource.Link(l.getAlias(), target, pairs));
+		}
+		try {
+			return ds.withLinks(list);
+		} catch (IllegalArgumentException e) {
+			throw new ReportException(e, "rb.error.invalidLink", e.getMessage());
+		}
 	}
 
 	public static boolean isAllowed(ReportDataSource ds, ReportSecurity security) {

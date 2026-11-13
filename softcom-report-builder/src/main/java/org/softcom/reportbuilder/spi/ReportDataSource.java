@@ -59,6 +59,10 @@ public class ReportDataSource implements Serializable {
 	private boolean automatic;
 	private final List<String[]> defaultConditions = new ArrayList<>();
 	private final Map<String, String[]> joinLabels = new LinkedHashMap<>();
+	/** Tables linked by a report (only on the copy made by {@link #withLinks}). */
+	private final Map<String, Link> links = new LinkedHashMap<>();
+	/** The catalog's data source this copy was made from, or null for the catalog's own object. */
+	private ReportDataSource base;
 
 	public ReportDataSource(String key, Class<?> rootEntity) {
 		if (key == null || !key.matches("[A-Za-z0-9_.\\-]{1,150}"))
@@ -221,6 +225,104 @@ public class ReportDataSource implements Serializable {
 		if (s == null || s.isEmpty())
 			s = arabic ? l[1] : l[0];
 		return s == null || s.isEmpty() ? null : s;
+	}
+
+	/**
+	 * A table linked to a report by equal columns: the alias of its fields
+	 * ({@code l1}), its data source, and the pairs {left field of the report
+	 * (or of an earlier link), right field path of the linked data source}.
+	 */
+	public static final class Link implements Serializable {
+
+		private static final long serialVersionUID = 1L;
+
+		private final String alias;
+		private final ReportDataSource target;
+		private final List<String[]> pairs;
+
+		public Link(String alias, ReportDataSource target, List<String[]> pairs) {
+			if (alias == null || target == null)
+				throw new IllegalArgumentException("alias and target are required");
+			if (target.base != null)
+				throw new IllegalArgumentException("A linked data source cannot have links itself: " + target.getKey());
+			this.alias = alias;
+			this.target = target;
+			List<String[]> copy = new ArrayList<>();
+			if (pairs != null)
+				for (String[] p : pairs)
+					copy.add(new String[] { p[0], p[1] });
+			this.pairs = Collections.unmodifiableList(copy);
+		}
+
+		public String getAlias() {
+			return alias;
+		}
+
+		public ReportDataSource getTarget() {
+			return target;
+		}
+
+		/** {left, right} field paths; left is a field of the report, right one of {@link #getTarget()}. */
+		public List<String[]> getPairs() {
+			return pairs;
+		}
+	}
+
+	/**
+	 * This data source as a report with linked tables sees it: the same
+	 * settings (key, root, joins, forced filter...) plus the fields of each
+	 * linked data source, named {@code alias:path}. Fields reached through a
+	 * collection of the linked table are not offered. The catalog's object is
+	 * not changed. With no links, returns this data source.
+	 */
+	public ReportDataSource withLinks(List<Link> linkList) {
+		if (linkList == null || linkList.isEmpty())
+			return this;
+		if (base != null)
+			throw new IllegalStateException("Data source " + key + " already has links");
+		ReportDataSource c = new ReportDataSource(key, rootEntity);
+		c.labelAr = labelAr;
+		c.labelEn = labelEn;
+		c.requiredRole = requiredRole;
+		c.joins.putAll(joins);
+		c.fields.putAll(fields);
+		c.forcedFilter = forcedFilter;
+		c.grainPath = grainPath;
+		c.grainIdAttribute = grainIdAttribute;
+		c.requiredFilterField = requiredFilterField;
+		c.maxDateRangeDays = maxDateRangeDays;
+		c.maxExportRows = maxExportRows;
+		c.dayFunction = dayFunction;
+		c.queryTimeoutSeconds = queryTimeoutSeconds;
+		c.automatic = automatic;
+		c.defaultConditions.addAll(defaultConditions);
+		c.joinLabels.putAll(joinLabels);
+		c.base = this;
+		for (Link l : linkList) {
+			if (c.links.put(l.getAlias(), l) != null)
+				throw new IllegalArgumentException("Duplicate link alias: " + l.getAlias());
+			ReportDataSource t = l.getTarget();
+			// the displayed names (they fall back to the other language, then to the key)
+			String tableAr = t.getLabel(new Locale("ar"));
+			String tableEn = t.getLabel(Locale.ENGLISH);
+			for (ReportField f : t.getFields()) {
+				if (f.isViaCollection())
+					continue;
+				ReportField lf = ReportField.linked(l.getAlias(), f, tableAr, tableEn);
+				c.fields.put(lf.getPath(), lf);
+			}
+		}
+		return c;
+	}
+
+	/** The tables linked to the report (empty unless made by {@link #withLinks}), by alias. */
+	public Map<String, Link> getLinks() {
+		return Collections.unmodifiableMap(links);
+	}
+
+	/** The catalog's data source (this one, unless this is a copy with links). */
+	public ReportDataSource getBase() {
+		return base == null ? this : base;
 	}
 
 	public boolean isAutomatic() {

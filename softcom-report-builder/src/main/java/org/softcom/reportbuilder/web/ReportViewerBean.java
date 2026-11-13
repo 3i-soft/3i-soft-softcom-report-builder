@@ -15,6 +15,7 @@ import javax.inject.Named;
 import org.softcom.reportbuilder.model.ReportDefinition;
 import org.softcom.reportbuilder.service.ReportDefinitionFacade;
 import org.softcom.reportbuilder.spec.FilterNode;
+import org.softcom.reportbuilder.spec.LinkSpec;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spi.ReportDataSource;
 import org.softcom.reportbuilder.spi.ReportField;
@@ -38,6 +39,7 @@ public class ReportViewerBean extends AbstractReportBean {
 	private String selectedDescription;
 	private boolean selectedEditable;
 	private String dataSourceKey;
+	private List<LinkSpec> links = new ArrayList<>();
 	private List<RuleEditor> parameters = new ArrayList<>();
 
 	@PostConstruct
@@ -83,6 +85,7 @@ public class ReportViewerBean extends AbstractReportBean {
 		first = 0;
 		parameters = new ArrayList<>();
 		dataSourceKey = null;
+		links = new ArrayList<>();
 		selectedName = null;
 		selectedDescription = null;
 		selectedEditable = false;
@@ -95,6 +98,7 @@ public class ReportViewerBean extends AbstractReportBean {
 			selectedDescription = d.getDescription();
 			selectedEditable = definitions.canEdit(d);
 			dataSourceKey = spec.getDataSource();
+			links = spec.getLinks();
 			for (FilterNode r : spec.getParameters()) {
 				ReportField f = field(r.getField());
 				parameters.add(RuleEditor.from(r, f == null ? null : f.getType(), f != null && (f.hasChoices() || f.hasLookup())));
@@ -149,7 +153,7 @@ public class ReportViewerBean extends AbstractReportBean {
 
 	@Override
 	public ReportDataSource getDataSource() {
-		return catalog.get(dataSourceKey);
+		return withLinks(dataSourceKey, links);
 	}
 
 	public List<SelectItem> getReportItems() {

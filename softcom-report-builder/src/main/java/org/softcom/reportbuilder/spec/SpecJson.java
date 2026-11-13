@@ -59,6 +59,24 @@ public final class SpecJson {
 			root.add("totals", true);
 		if (spec.isSubtotals())
 			root.add("subtotals", true);
+		if (!spec.getLinks().isEmpty()) {
+			JsonArrayBuilder links = Json.createArrayBuilder();
+			for (LinkSpec l : spec.getLinks()) {
+				JsonObjectBuilder o = Json.createObjectBuilder();
+				addIfNotNull(o, "alias", l.getAlias());
+				addIfNotNull(o, "dataSource", l.getDataSource());
+				JsonArrayBuilder on = Json.createArrayBuilder();
+				for (LinkSpec.Pair p : l.getOn()) {
+					JsonObjectBuilder po = Json.createObjectBuilder();
+					addIfNotNull(po, "left", p.getLeft());
+					addIfNotNull(po, "right", p.getRight());
+					on.add(po);
+				}
+				o.add("on", on);
+				links.add(o);
+			}
+			root.add("links", links);
+		}
 		StringWriter sw = new StringWriter();
 		try (JsonWriter w = Json.createWriter(sw)) {
 			w.writeObject(root.build());
@@ -127,6 +145,14 @@ public final class SpecJson {
 			spec.setSort(sort);
 			spec.setTotals(root.getBoolean("totals", false));
 			spec.setSubtotals(root.getBoolean("subtotals", false));
+			List<LinkSpec> links = new ArrayList<>();
+			for (JsonObject l : objects(root, "links")) {
+				LinkSpec link = new LinkSpec(string(l, "alias"), string(l, "dataSource"));
+				for (JsonObject p : objects(l, "on"))
+					link.getOn().add(new LinkSpec.Pair(string(p, "left"), string(p, "right")));
+				links.add(link);
+			}
+			spec.setLinks(links);
 			return spec;
 		} catch (ClassCastException | NullPointerException e) {
 			throw new ReportException(e, "rb.error.invalidDefinition", "unexpected structure");

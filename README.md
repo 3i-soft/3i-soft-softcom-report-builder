@@ -160,6 +160,16 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
 
 A date column may carry `"datePart": "DAY" | "MONTH" | "YEAR"`.
 
+A report may link other tables by equal columns (see *Linked tables*); their fields are named `alias:path`:
+
+```json
+  "links": [ {"alias": "l1", "dataSource": "auto.ItemCalculatedFields",
+              "on": [ {"left": "item_id", "right": "item_id"},
+                      {"left": "warehouse_id", "right": "warehouse_id"} ]} ],
+  "columns": [ {"field": "item.itemName"}, {"field": "quantity", "aggregate": "SUM"},
+               {"field": "l1:totalAvailableQuantity", "aggregate": "MAX"} ]
+```
+
 When any column has a total, the other columns become the GROUP BY. Conditions marked `askAtRun` are asked for each
 time the report is run. DATE fields use whole-day semantics (`BETWEEN d1 AND d2` includes all of `d2`), so they also
 work on timestamp columns and still use an index. DATETIME fields do the same when the values are plain days
@@ -268,6 +278,15 @@ generalWarehouse's `GwReportRowFilter` limits every report to the user's warehou
 - **Subtotals**: in a grouped report with two or more grouping columns, a subtotal row after each value of the first
   column (the rows are then ordered by that column first). One small query per page / export chunk, for the values
   shown only. A value cut by the export limit gets no subtotal.
+- **Linked tables**: a report can add up to 3 other tables that have no declared relation with its own, joined by
+  1 to 5 pairs of equal columns, e.g. invoice lines and item statistics by `item_id = item_id` and
+  `warehouse_id = warehouse_id`. Only the rows with a matching row in the linked table are kept (an inner join: a
+  second `FROM` plus `WHERE` conditions, so it runs on any JPA provider). The linked table's fields then appear in
+  the column and condition lists under "Linked 1: <table>", and work like the report's own: totals, grouping,
+  conditions, sorting, pick lists, Excel. A link may use the columns of an earlier link. The user must be allowed to
+  use every linked data source, and its forced filter and the row restrictions apply to it too. A row of the report's
+  table that matches several linked rows appears once per match (as in SQL), so link by columns that identify one
+  linked row (e.g. item + warehouse) when totals of the report's own numbers matter.
 - **Sharing and folders**: a report is private, shared with everyone, or shared with chosen users and/or roles.
   Reports can be put in folders; the viewer lists them by folder.
 - **Labels page**: every table, field and value name with the one found automatically, the ones without an Arabic
@@ -304,6 +323,9 @@ heavy report was stopped by a 1-second test timeout and PostgreSQL cancelled the
   entity's name (plus `_id` / `Id`, optionally after to/from/parent...); an entity without a name-like text attribute
   gets no pick list.
 - Subtotals are by the first grouping column only (one level).
+- Linked tables are inner joins only: rows without a match are left out (no "keep rows without a match" option, as
+  JPA 2.1 Criteria cannot outer-join unrelated entities). The large-table rule and the ⚡ marks look at the report's
+  own table only; a condition on a linked table's indexed column does not count as a fast condition.
 
 ## Not in 1.0 (possible next steps)
 

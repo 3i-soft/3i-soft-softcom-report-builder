@@ -17,6 +17,7 @@ import org.softcom.reportbuilder.testmodel.TInvoice;
 import org.softcom.reportbuilder.testmodel.TInvoiceLine;
 import org.softcom.reportbuilder.testmodel.TItem;
 import org.softcom.reportbuilder.testmodel.TItemKind;
+import org.softcom.reportbuilder.testmodel.TItemStock;
 import org.softcom.reportbuilder.testmodel.TOrder;
 import org.softcom.reportbuilder.testmodel.TOrderLine;
 import org.softcom.reportbuilder.testmodel.TSupplier;
@@ -71,6 +72,11 @@ final class TestDb {
 			em.close();
 			if (!deletedSeeded)
 				seedCodedSuppliers(emf);
+			em = emf.createEntityManager();
+			boolean stockSeeded = em.find(TItemStock.class, 1L) != null;
+			em.close();
+			if (!stockSeeded)
+				seedStock(emf);
 		}
 		return emf;
 	}
@@ -127,6 +133,21 @@ final class TestDb {
 		o2.getLines().add(l3);
 		em.persist(o1);
 		em.persist(o2);
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	/**
+	 * Stock per item and warehouse, without relations (linked tables): apple in
+	 * both warehouses of company A, bread in Main only, nothing for the third
+	 * item nor for the other company's warehouse.
+	 */
+	private static void seedStock(EntityManagerFactory factory) {
+		EntityManager em = factory.createEntityManager();
+		em.getTransaction().begin();
+		em.persist(new TItemStock(1L, 100, 10, "40"));
+		em.persist(new TItemStock(2L, 100, 11, "15"));
+		em.persist(new TItemStock(3L, 101, 10, "8"));
 		em.getTransaction().commit();
 		em.close();
 	}

@@ -66,6 +66,65 @@
 
 			<h:panelGroup rendered="#{rbDesigner.dataSource ne null}">
 
+				<!-- linked tables: another data source joined by equal columns (its fields then appear in the lists below).
+				     Every change updates the whole form: the column and condition lists depend on the links. -->
+				<h:panelGroup id="rbLinks" layout="block" styleClass="rb-panel rb-links">
+					<div class="rb-panel-head">
+						<span class="rb-head-icon"><i class="fa fa-link" /></span>
+						<div class="rb-titles">
+							<div class="rb-panel-title">#{rbbundle['rb.section.links']}</div>
+							<div class="rb-panel-hint">#{rbbundle['rb.hint.links']}</div>
+						</div>
+					</div>
+					<ui:repeat value="#{rbDesigner.links}" var="link">
+						<div class="rb-group">
+							<div class="rb-group-head">
+								<h:outputFormat value="#{rbbundle['rb.link.table']}">
+									<f:param value="#{link.alias.substring(1)}" />
+								</h:outputFormat>
+								<p:selectOneMenu value="#{link.dataSource}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-xl">
+									<f:selectItem itemLabel="#{rbbundle['rb.link.chooseTable']}" itemValue="#{null}" noSelectionOption="true" />
+									<f:selectItems value="#{rbDesigner.linkDataSourceItems}" />
+									<p:ajax listener="#{rbDesigner.onLinkDataSourceChange(link)}" process="@form" update="@form" />
+								</p:selectOneMenu>
+								<span class="rb-row-end">
+									<p:commandButton value="&#10005;" title="#{rbbundle['rb.remove']}" action="#{rbDesigner.removeLink(link)}" process="@form"
+										update="@form" styleClass="rb-btn rb-icon rb-icon-danger" />
+								</span>
+							</div>
+							<h:panelGroup rendered="#{link.dataSource ne null}">
+								<ui:repeat value="#{link.on}" var="pair">
+									<div class="rb-row">
+										<p:selectOneMenu value="#{pair.left}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg"
+											title="#{rbbundle['rb.link.leftField']}">
+											<f:selectItem itemLabel="#{rbbundle['rb.link.leftField']}" itemValue="#{null}" noSelectionOption="true" />
+											<f:selectItems value="#{rbDesigner.linkLeftItems(link)}" />
+											<p:ajax process="@form" update="@form" />
+										</p:selectOneMenu>
+										<span class="rb-label">#{rbbundle['rb.link.on']} =</span>
+										<p:selectOneMenu value="#{pair.right}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg"
+											title="#{rbbundle['rb.link.rightField']}">
+											<f:selectItem itemLabel="#{rbbundle['rb.link.rightField']}" itemValue="#{null}" noSelectionOption="true" />
+											<f:selectItems value="#{rbDesigner.linkRightItems(link)}" />
+											<p:ajax process="@form" update="@form" />
+										</p:selectOneMenu>
+										<span class="rb-row-end">
+											<p:commandButton value="&#10005;" title="#{rbbundle['rb.remove']}" action="#{rbDesigner.removeLinkPair(link, pair)}"
+												process="@form" update="@form" styleClass="rb-btn rb-icon rb-icon-danger" />
+										</span>
+									</div>
+								</ui:repeat>
+								<p:commandButton value="#{rbbundle['rb.addLinkPair']}" icon="fa fa-plus" action="#{rbDesigner.addLinkPair(link)}" process="@form"
+									update="@form" styleClass="rb-add" rendered="#{rbDesigner.canAddLinkPair(link)}" />
+							</h:panelGroup>
+						</div>
+					</ui:repeat>
+					<h:panelGroup layout="block" styleClass="rb-adds" rendered="#{rbDesigner.canAddLink}">
+						<p:commandButton value="#{rbbundle['rb.addLink']}" icon="fa fa-plus" action="#{rbDesigner.addLink}" process="@form"
+							update="@form" styleClass="rb-add" />
+					</h:panelGroup>
+				</h:panelGroup>
+
 				<!-- 1. columns -->
 				<h:panelGroup id="rbColumns" layout="block" styleClass="rb-panel rb-columns">
 					<div class="rb-panel-head">

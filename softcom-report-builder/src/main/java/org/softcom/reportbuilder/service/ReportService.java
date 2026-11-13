@@ -214,7 +214,7 @@ public class ReportService {
 	/** Table statistics are a hint: whatever goes wrong reading them (another provider, a class missing...), the report runs. */
 	private SpeedInfo speedOf(ReportDataSource ds) {
 		try {
-			SpeedInfo s = speedService.speed(ds);
+			SpeedInfo s = speedService.speed(ds.getBase());
 			return s == null ? SpeedInfo.UNKNOWN : s;
 		} catch (RuntimeException | LinkageError e) {
 			LOG.log(Level.FINE, "No table statistics for " + ds.getKey(), e);
@@ -235,10 +235,8 @@ public class ReportService {
 	private ReportDataSource dataSource(ReportSpec spec) {
 		if (!security.canRun())
 			throw new ReportException("rb.error.accessDenied");
-		ReportDataSource ds = catalog.get(spec.getDataSource());
-		if (!ReportCatalog.isAllowed(ds, security))
-			throw new ReportException("rb.error.unknownDataSource", spec.getDataSource());
-		return ds;
+		// the data source with the report's linked tables (checks the user may use each of them)
+		return catalog.resolve(spec, security);
 	}
 
 	private ReportRunContext context() {

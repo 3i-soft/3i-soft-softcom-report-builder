@@ -36,6 +36,9 @@ public class ReportField implements Serializable {
 	private ChoiceSource choiceSource;
 	private ReportLookup lookup;
 	private String collection;
+	/** For a field of a linked table: the link's alias and the linked data source's own field. */
+	private String linkAlias;
+	private ReportField linkedField;
 
 	public ReportField(String path, FieldType type) {
 		this(path, type, null);
@@ -65,6 +68,52 @@ public class ReportField implements Serializable {
 		// Not groupable by default: a constant inside the expression is bound as a separate JDBC parameter in
 		// SELECT and GROUP BY, which PostgreSQL rejects. Call groupable(true) for expressions without constants.
 		return new ReportField(key, type, expression).labels(labelAr, labelEn).groupable(false);
+	}
+
+	/**
+	 * The field of a table linked to a report ({@code org.softcom.reportbuilder.spec.LinkSpec}):
+	 * a copy named {@code alias:path} whose labels start with the linked
+	 * table's name, so result columns of both tables can be told apart.
+	 */
+	public static ReportField linked(String alias, ReportField original, String tableLabelAr, String tableLabelEn) {
+		if (alias == null || original == null || original.isViaCollection() || original.isLinked())
+			throw new IllegalArgumentException("Cannot link field " + original + " as " + alias);
+		ReportField f = new ReportField(alias + ":" + original.path, original.type, null);
+		f.labelAr = prefixed(tableLabelAr, original.labelAr != null ? original.labelAr : original.labelEn);
+		f.labelEn = prefixed(tableLabelEn, original.labelEn != null ? original.labelEn : original.labelAr);
+		f.hintAr = original.hintAr;
+		f.hintEn = original.hintEn;
+		f.filterable = original.filterable;
+		f.groupable = original.groupable;
+		f.aggregatable = original.aggregatable;
+		f.caseInsensitive = original.caseInsensitive;
+		f.format = original.format;
+		f.enumValues = original.enumValues;
+		f.choiceSource = original.choiceSource;
+		f.lookup = original.lookup;
+		f.linkAlias = alias;
+		f.linkedField = original;
+		return f;
+	}
+
+	private static String prefixed(String table, String label) {
+		String l = label == null ? "" : label;
+		return table == null || table.isEmpty() ? l : table + " - " + l;
+	}
+
+	/** Whether this is the field of a linked table (see {@link #linked}). */
+	public boolean isLinked() {
+		return linkAlias != null;
+	}
+
+	/** The alias of the link this field comes from, or null. */
+	public String getLinkAlias() {
+		return linkAlias;
+	}
+
+	/** For a linked field: the field as the linked data source declares it (its own path), else null. */
+	public ReportField getLinkedField() {
+		return linkedField;
 	}
 
 	public ReportField labels(String labelAr, String labelEn) {
@@ -219,7 +268,7 @@ public class ReportField implements Serializable {
 
 	/** The path of the join this field is reached through, or null for a root attribute / computed field. */
 	public String getJoinPath() {
-		if (expression != null || collection != null)
+		if (expression != null || collection != null || linkAlias != null)
 			return null;
 		int dot = path.lastIndexOf('.');
 		return dot < 0 ? null : path.substring(0, dot);

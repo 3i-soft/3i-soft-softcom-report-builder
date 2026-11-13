@@ -139,12 +139,11 @@ public final class ReportQueryBuilder {
 			for (int i = 0; i < spec.getColumns().size(); i++)
 				if (!spec.getColumns().get(i).isAggregated() && !sorted.contains(i))
 					orders.add(cb.asc(columnExpressions.get(i)));
-		} else if (ds.getGrainPath() != null) {
-			orders.add(cb.asc(b.ctx.join(ds.getGrainPath()).get(ds.getGrainIdAttribute())));
 		} else {
-			String id = idAttribute(em, ds.getRootEntity());
-			if (id != null)
-				orders.add(cb.asc(b.root.get(id)));
+			addRowOrder(em, b.ctx, orders, cb);
+			// with linked tables a row of the data source can appear once per matching linked row
+			for (QueryContextImpl l : b.ctx.getLinked().values())
+				addRowOrder(em, l, orders, cb);
 		}
 		if (!orders.isEmpty())
 			b.cq.orderBy(orders);
@@ -181,6 +180,18 @@ public final class ReportQueryBuilder {
 		b.cq.multiselect(selections);
 		b.where(null);
 		return new Built(b.cq, null, positions);
+	}
+
+	/** The unique order of one table's rows: its grain element's id, or its root's id. */
+	private static void addRowOrder(EntityManager em, QueryContextImpl c, List<Order> orders, CriteriaBuilder cb) {
+		ReportDataSource d = c.getDataSource();
+		if (d.getGrainPath() != null) {
+			orders.add(cb.asc(c.join(d.getGrainPath()).get(d.getGrainIdAttribute())));
+		} else {
+			String id = idAttribute(em, d.getRootEntity());
+			if (id != null)
+				orders.add(cb.asc(c.getRoot().get(id)));
+		}
 	}
 
 	/** In a plain list, the grand total sums the report's own numbers (not ids or codes). */
@@ -248,6 +259,9 @@ public final class ReportQueryBuilder {
 			// "row count" and totals of root fields would change meaning with the selected columns.
 			if (ds.getGrainPath() != null)
 				ctx.join(ds.getGrainPath());
+			// tables linked by equal columns: a second FROM each, joined by the WHERE conditions of where()
+			for (ReportDataSource.Link l : ds.getLinks().values())
+				ctx.link(l.getAlias(), l.getTarget());
 		}
 
 		ReportField field(ColumnSpec c) {
@@ -323,6 +337,22 @@ public final class ReportQueryBuilder {
 			}
 			// the application's row restrictions (e.g. the user's warehouses), for every data source
 			where.addAll(RowRestrictionApplier.predicates(em, ctx, ds, run == null ? null : run.getRestrictions()));
+			// each linked table: its pairs of equal columns, and its own forced filter and row restrictions (a
+			// link never shows rows of a table the user could not report on directly)
+			for (ReportDataSource.Link l : ds.getLinks().values()) {
+				QueryContextImpl lc = ctx.linked(l.getAlias());
+				ReportDataSource target = l.getTarget();
+				for (String[] pair : l.getPairs())
+					where.add(cb.equal(ctx.field(ds.getField(pair[0])), lc.field(target.getField(pair[1]))));
+				if (target.getForcedFilter() != null) {
+					List<Predicate> forced = target.getForcedFilter().build(lc);
+					if (forced != null)
+						for (Predicate p : forced)
+							if (p != null)
+								where.add(p);
+				}
+				where.addAll(RowRestrictionApplier.predicates(em, lc, target, run == null ? null : run.getRestrictions()));
+			}
 			Predicate user = new PredicateBuilder(cb, ctx, ds).build(spec.getFilter());
 			if (user != null)
 				where.add(user);

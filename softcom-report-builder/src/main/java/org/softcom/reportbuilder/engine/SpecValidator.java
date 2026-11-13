@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.softcom.reportbuilder.spec.ColumnSpec;
+import org.softcom.reportbuilder.spec.LinkSpec;
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
@@ -28,6 +29,8 @@ public final class SpecValidator {
 	public static final int MAX_RULES = 60;
 	public static final int MAX_LIST_VALUES = 500;
 	public static final int MAX_SORTS = 5;
+	public static final int MAX_LINKS = 3;
+	public static final int MAX_LINK_PAIRS = 5;
 
 	private SpecValidator() {
 	}
@@ -41,6 +44,7 @@ public final class SpecValidator {
 			throw new ReportException("rb.error.invalidDefinition", "null");
 		if (ds == null || !ds.getKey().equals(spec.getDataSource()))
 			throw new ReportException("rb.error.unknownDataSource", spec.getDataSource());
+		validateLinks(spec, ds);
 		List<ColumnSpec> columns = spec.getColumns();
 		if (columns.isEmpty())
 			throw new ReportException("rb.error.noColumns");
@@ -74,6 +78,65 @@ public final class SpecValidator {
 				throw new ReportException("rb.error.invalidSort", s.getColumn());
 		if (requireValues)
 			checkRequiredFilter(spec, ds);
+	}
+
+	/**
+	 * The report's links must be exactly the ones the data source was resolved
+	 * with ({@link ReportDataSource#withLinks}), each with 1 to
+	 * {@value #MAX_LINK_PAIRS} pairs of comparable fields: a field of the
+	 * report or of an earlier link on the left, a field of the linked table on
+	 * the right.
+	 */
+	static void validateLinks(ReportSpec spec, ReportDataSource ds) {
+		List<LinkSpec> links = spec.getLinks();
+		if (links.size() > MAX_LINKS)
+			throw new ReportException("rb.error.tooManyLinks", MAX_LINKS);
+		if (links.size() != ds.getLinks().size())
+			throw new ReportException("rb.error.invalidLink", links.size());
+		Set<String> earlier = new HashSet<>();
+		for (LinkSpec l : links) {
+			String alias = l.getAlias();
+			ReportDataSource.Link resolved = alias == null ? null : ds.getLinks().get(alias);
+			if (alias == null || !alias.matches(LinkSpec.ALIAS_PATTERN) || resolved == null || earlier.contains(alias)
+					|| !resolved.getTarget().getKey().equals(l.getDataSource()))
+				throw new ReportException("rb.error.invalidLink", alias);
+			ReportDataSource target = resolved.getTarget();
+			if (l.getOn().isEmpty())
+				throw new ReportException("rb.error.linkNeedsPair", target.getKey());
+			if (l.getOn().size() > MAX_LINK_PAIRS)
+				throw new ReportException("rb.error.tooManyLinkPairs", MAX_LINK_PAIRS);
+			if (l.getOn().size() != resolved.getPairs().size())
+				throw new ReportException("rb.error.invalidLink", alias);
+			for (int i = 0; i < l.getOn().size(); i++) {
+				LinkSpec.Pair p = l.getOn().get(i);
+				String[] r = resolved.getPairs().get(i);
+				if (!p.isComplete())
+					throw new ReportException("rb.error.linkNeedsPair", target.getKey());
+				if (!p.getLeft().equals(r[0]) || !p.getRight().equals(r[1]))
+					throw new ReportException("rb.error.invalidLink", alias);
+				ReportField left = field(ds, p.getLeft());
+				String leftAlias = LinkSpec.aliasOf(p.getLeft());
+				if (leftAlias != null && !earlier.contains(leftAlias))
+					throw new ReportException("rb.error.unknownField", p.getLeft());
+				ReportField right = field(target, p.getRight());
+				for (ReportField f : new ReportField[] { left, right })
+					if (f.isViaCollection() || !f.isFilterable())
+						throw new ReportException("rb.error.notFilterable", f.getPath());
+				if (!comparable(left.getType(), right.getType()))
+					throw new ReportException("rb.error.linkTypes", left.getPath(), l.fieldPrefix() + right.getPath());
+			}
+			earlier.add(alias);
+		}
+	}
+
+	/** Pairs of a link compare numbers with numbers (an id may be a double on one side and a long on the other). */
+	static boolean comparable(FieldType a, FieldType b) {
+		if (a == b)
+			return true;
+		if (a.isNumeric() && b.isNumeric())
+			return true;
+		return (a == FieldType.STRING || a == FieldType.ENUM) && (b == FieldType.STRING || b == FieldType.ENUM)
+				|| a.isTemporal() && b.isTemporal();
 	}
 
 	private static void validateFilter(FilterNode root, ReportDataSource ds, boolean requireValues) {

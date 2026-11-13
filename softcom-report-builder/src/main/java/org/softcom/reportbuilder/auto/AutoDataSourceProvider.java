@@ -1,5 +1,6 @@
 package org.softcom.reportbuilder.auto;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -50,8 +51,13 @@ public class AutoDataSourceProvider implements ReportDataSourceProvider {
 			EntityDiscovery.Options options = EntityDiscovery.Options.fromConfig();
 			if (!codeProviders.isUnsatisfied())
 				options.codeLookup(this::codes);
+			Collection<ReportLabel> saved = savedLabels();
+			// tables and fields hidden on the labels page
+			for (ReportLabel l : saved)
+				if (l.isHidden())
+					options.hide(l.getKey());
 			List<ReportDataSource> list = EntityDiscovery.discover(persistenceHelper.getEntityManager().getMetamodel(),
-					withSavedLabels(LabelResolver.fromApplication()), options);
+					withSavedLabels(LabelResolver.fromApplication(), saved), options);
 			LOG.info("Report builder: " + list.size() + " automatic data sources");
 			return list;
 		} catch (RuntimeException e) {
@@ -60,22 +66,31 @@ public class AutoDataSourceProvider implements ReportDataSourceProvider {
 		}
 	}
 
-	/** The labels entered on the labels page first; without the rb_label table (script not run yet), none. */
-	private LabelResolver withSavedLabels(LabelResolver labels) {
+	/**
+	 * What was saved on the labels page; without the rb_label table (script not
+	 * run yet) or its 1.2.0 "hidden" column, nothing - the reports still work.
+	 */
+	private Collection<ReportLabel> savedLabels() {
 		try {
-			Map<String, String> ar = new HashMap<>();
-			Map<String, String> en = new HashMap<>();
-			for (ReportLabel l : labelService.findAll().values()) {
-				if (l.getLabelAr() != null)
-					ar.put(l.getKey(), l.getLabelAr());
-				if (l.getLabelEn() != null)
-					en.put(l.getKey(), l.getLabelEn());
-			}
-			return labels.withSaved(ar, en);
+			return labelService.findAll().values();
 		} catch (RuntimeException e) {
-			LOG.log(Level.INFO, "Report builder: no saved labels (has the rb_label table been created?)", e);
-			return labels;
+			LOG.log(Level.WARNING, "Report builder: no saved labels nor hidden tables/fields (have the rb_label scripts,"
+					+ " up to postgresql-1.2.0.sql, been run?)", e);
+			return Collections.emptyList();
 		}
+	}
+
+	/** The labels entered on the labels page first. */
+	private static LabelResolver withSavedLabels(LabelResolver labels, Collection<ReportLabel> saved) {
+		Map<String, String> ar = new HashMap<>();
+		Map<String, String> en = new HashMap<>();
+		for (ReportLabel l : saved) {
+			if (l.getLabelAr() != null)
+				ar.put(l.getKey(), l.getLabelAr());
+			if (l.getLabelEn() != null)
+				en.put(l.getKey(), l.getLabelEn());
+		}
+		return labels.withSaved(ar, en);
 	}
 
 	/** The first non-empty list of the application's code providers. */

@@ -13,7 +13,7 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
 /**
- * A display name entered on the labels page, for a table ({@code Invoice}), a
+ * A display name entered on the labels page (or a table / field hidden there), for a table ({@code Invoice}), a
  * field ({@code Invoice.totalPrice}, or {@code MainEntity.creationDate} for
  * every table inheriting it) or a value ({@code InvoiceStatus.CLOSED}). It
  * wins over every other source of labels.
@@ -36,6 +36,10 @@ public class ReportLabel implements Serializable {
 
 	@Column(name = "label_en", length = 300)
 	private String labelEn;
+
+	/** A table or field hidden on the labels page: not offered in reports (see EntityDiscovery.Options#hide). */
+	@Column(name = "hidden", nullable = false)
+	private boolean hidden;
 
 	@Column(name = "updated_by", length = 100)
 	private String updatedBy;
@@ -69,6 +73,14 @@ public class ReportLabel implements Serializable {
 
 	public void setLabelEn(String labelEn) {
 		this.labelEn = labelEn;
+	}
+
+	public boolean isHidden() {
+		return hidden;
+	}
+
+	public void setHidden(boolean hidden) {
+		this.hidden = hidden;
 	}
 
 	public String getUpdatedBy() {

@@ -55,7 +55,9 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
 
 4. **Tables.** Copy the scripts of `src/main/resources/META-INF/softcom-report-builder/sql/` into the app's Flyway
    folder as its next versions, in order: `postgresql-1.0.0.sql`, then `postgresql-1.1.0.sql` (shared users, folders,
-   `rb_label`). They are idempotent. (generalWarehouse: `V5_6_4` and `V5_6_5`.)
+   `rb_label`), then `postgresql-1.2.0.sql` (tables and fields hidden on the labels page). They are idempotent.
+   Without the 1.2.0 script the saved labels and hidden flags cannot be read: the reports still work, with the
+   automatic names and every table shown (a warning is logged).
 
 5. **Data sources.** Nothing to do: every entity is offered automatically (generalWarehouse has no report code at
    all). Keep the library in the WAR's own `WEB-INF/lib` (its caches are per application). Hand-written data sources
@@ -293,6 +295,14 @@ generalWarehouse's `GwReportRowFilter` limits every report to the user's warehou
   name first; names are saved in `rb_label` and used at once (the data sources are rebuilt, no restart). A field of a
   shared base class (`MainEntity.creationDate`) is named once for all its tables. The list can be exported to Excel,
   e.g. to have the missing names translated.
+- **Hiding tables and fields** (labels page, "Shown in reports"): a hidden table is not offered as a data source (nor
+  as a linked table) and is not reached through other tables' relations; a hidden field is not offered anywhere -
+  columns, conditions, linked-table pairs - and hiding a relation (`InvoiceLine.item`) hides everything behind it.
+  A field of a shared base class (`MainEntity.creationDate`) is hidden in every table. Hiding is by exact table: a
+  subclass (`PurchaseInvoice`) stays offered unless hidden too. "Hide all listed" / "Show all listed" act on what the
+  search shows, e.g. hide every table, then show the few the users need. Applied at once, for every user; a saved
+  report that uses a hidden table or field can no longer run until it is shown again. Hand-written data sources are
+  not affected (their developer chooses their fields).
 
 ## Speed rules
 

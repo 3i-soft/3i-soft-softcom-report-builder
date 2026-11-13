@@ -87,6 +87,10 @@ public final class EntityDiscovery {
 		private boolean defaultConditions = true;
 		private Function<String, Map<String, String>> codeLookup;
 		private final Set<String> excluded = new HashSet<>();
+		/** Tables hidden on the labels page (exact entity names: a subclass stays offered unless hidden too). */
+		private final Set<String> hiddenEntities = new HashSet<>();
+		/** Fields hidden on the labels page, by label key ({@code Item.cost}, {@code MainEntity.creationDate}). */
+		private final Set<String> hiddenFields = new HashSet<>();
 		private String requiredRole;
 		private int queryTimeoutSeconds = 30;
 
@@ -135,6 +139,28 @@ public final class EntityDiscovery {
 			if (entityName != null && !entityName.trim().isEmpty())
 				excluded.add(entityName.trim().toLowerCase(Locale.ROOT));
 			return this;
+		}
+
+		/**
+		 * Hides a table ({@code Invoice}) or a field ({@code Item.cost}, keyed
+		 * like the labels page: by its declaring class, so a field of a shared
+		 * base class is hidden in every table). A hidden table is not a data
+		 * source and is not reached through other tables' relations; a hidden
+		 * field is not offered anywhere (nor, for a relation, anything behind it).
+		 */
+		public Options hide(String key) {
+			if (key == null || key.trim().isEmpty())
+				return this;
+			String k = key.trim();
+			if (k.indexOf('.') < 0)
+				hiddenEntities.add(k);
+			else
+				hiddenFields.add(k);
+			return this;
+		}
+
+		boolean isHiddenField(String entity, String attribute, AnnotatedElement member) {
+			return !hiddenFields.isEmpty() && hiddenFields.contains(LabelResolver.attributeKey(entity, attribute, member));
 		}
 
 		public Options requiredRole(String role) {
@@ -192,7 +218,7 @@ public final class EntityDiscovery {
 				Type<?> elementType = ((PluralAttribute<?, ?, ?>) a).getElementType();
 				String name = a.getName();
 				if (!(elementType instanceof EntityType) || !offered((EntityType<?>) elementType, options)
-						|| !IDENTIFIER.matcher(name).matches() || isSensitive(name))
+						|| !IDENTIFIER.matcher(name).matches() || isSensitive(name) || options.isHiddenField(t.getName(), name, member(a)))
 					continue;
 				String relAr = labels.attributeAr(t.getName(), name, member(a));
 				String relEn = labels.attributeEn(t.getName(), name, member(a));
@@ -215,7 +241,7 @@ public final class EntityDiscovery {
 		if (elementId == null || !offered(element, options) || refersTo(element, owner.getJavaType()) || options.depth < 1)
 			return null;
 		String name = c.getName();
-		if (!IDENTIFIER.matcher(name).matches())
+		if (!IDENTIFIER.matcher(name).matches() || options.isHiddenField(owner.getName(), name, member(c)))
 			return null;
 		String ownerAr = labels.entityAr(owner.getName(), owner.getJavaType());
 		String ownerEn = labels.entityEn(owner.getName(), owner.getJavaType());
@@ -297,7 +323,7 @@ public final class EntityDiscovery {
 				if (added >= budget)
 					return;
 				String name = a.getName();
-				if (!IDENTIFIER.matcher(name).matches() || isSensitive(name))
+				if (!IDENTIFIER.matcher(name).matches() || isSensitive(name) || options.isHiddenField(entity, name, member(a)))
 					continue;
 				try {
 					addAttribute(a, entity, name, level, queue);
@@ -449,7 +475,7 @@ public final class EntityDiscovery {
 		for (IdentifiableType<?> type = t; type != null; type = type.getSupertype())
 			if (type instanceof EntityType && options.excluded.contains(((EntityType<?>) type).getName().toLowerCase(Locale.ROOT)))
 				return false;
-		return true;
+		return !options.hiddenEntities.contains(name);
 	}
 
 	/** Whether an entity is offered (as a data source, a pick list, on the labels page). */

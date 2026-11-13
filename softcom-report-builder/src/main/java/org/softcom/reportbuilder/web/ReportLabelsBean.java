@@ -51,6 +51,7 @@ public class ReportLabelsBean implements Serializable {
 	private String search;
 	private String kind;
 	private boolean missingOnly = true;
+	private boolean hiddenOnly;
 	private int first;
 	private boolean allowed;
 
@@ -60,15 +61,46 @@ public class ReportLabelsBean implements Serializable {
 		private final LabelCatalog.Entry entry;
 		private final String savedAr;
 		private final String savedEn;
+		private final boolean savedHidden;
 		private String ar;
 		private String en;
+		private boolean hidden;
 
 		LabelRow(LabelCatalog.Entry entry, ReportLabel saved) {
 			this.entry = entry;
 			this.savedAr = saved == null ? null : saved.getLabelAr();
 			this.savedEn = saved == null ? null : saved.getLabelEn();
+			this.savedHidden = saved != null && saved.isHidden();
 			this.ar = savedAr;
 			this.en = savedEn;
+			this.hidden = savedHidden;
+		}
+
+		/** Tables and fields can be hidden from reports; values (enum constants) cannot. */
+		public boolean isHideable() {
+			return entry.getKind() != LabelCatalog.Kind.VALUE;
+		}
+
+		/** The page's checkbox: "shown in reports". */
+		public boolean isShown() {
+			return !hidden;
+		}
+
+		public void setShown(boolean shown) {
+			if (isHideable())
+				this.hidden = !shown;
+		}
+
+		public boolean isHidden() {
+			return hidden;
+		}
+
+		boolean isHiddenChanged() {
+			return hidden != savedHidden;
+		}
+
+		boolean isLabelChanged() {
+			return !same(ar, savedAr) || !same(en, savedEn);
 		}
 
 		public LabelCatalog.Entry getEntry() {
@@ -81,7 +113,7 @@ public class ReportLabelsBean implements Serializable {
 		}
 
 		boolean isChanged() {
-			return !same(ar, savedAr) || !same(en, savedEn);
+			return isLabelChanged() || isHiddenChanged();
 		}
 
 		public String getAr() {
@@ -137,6 +169,8 @@ public class ReportLabelsBean implements Serializable {
 		for (LabelRow r : rows) {
 			if (missingOnly && !r.isMissing())
 				continue;
+			if (hiddenOnly && !r.isHidden())
+				continue;
 			if (!blank(kind) && !r.getEntry().getKind().name().equals(kind))
 				continue;
 			if (q != null && !contains(r.getEntry().getKey(), q) && !contains(r.getEntry().getAutoAr(), q)
@@ -149,20 +183,52 @@ public class ReportLabelsBean implements Serializable {
 
 	public void save() {
 		Map<String, String[]> changes = new LinkedHashMap<>();
-		for (LabelRow r : rows)
-			if (r.isChanged())
+		Map<String, Boolean> hiddenChanges = new LinkedHashMap<>();
+		for (LabelRow r : rows) {
+			if (r.isLabelChanged())
 				changes.put(r.getEntry().getKey(), new String[] { r.ar, r.en });
-		if (changes.isEmpty()) {
+			if (r.isHiddenChanged())
+				hiddenChanges.put(r.getEntry().getKey(), r.hidden);
+		}
+		if (changes.isEmpty() && hiddenChanges.isEmpty()) {
 			ReportUi.info("rb.labels.nothingChanged");
 			return;
 		}
 		try {
-			int n = labelService.save(changes);
+			int n = labelService.save(changes, hiddenChanges);
 			ReportUi.info("rb.labels.saved", n);
 			load();
 		} catch (RuntimeException e) {
 			ReportUi.error(e, null);
 		}
+	}
+
+	/** Hides every table and field the filter shows (e.g. all tables, then show the few the users need). Saved by "Save". */
+	public void hideFiltered() {
+		setShownOfFiltered(false);
+	}
+
+	/** Shows every table and field the filter shows. Saved by "Save". */
+	public void showFiltered() {
+		setShownOfFiltered(true);
+	}
+
+	private void setShownOfFiltered(boolean shown) {
+		int n = 0;
+		for (LabelRow r : filtered)
+			if (r.isHideable() && r.isShown() != shown) {
+				r.setShown(shown);
+				n++;
+			}
+		ReportUi.info(shown ? "rb.labels.markedShown" : "rb.labels.markedHidden", n);
+	}
+
+	public int getHiddenCount() {
+		int n = 0;
+		for (LabelRow r : rows)
+			if (r.isHidden())
+				n++;
+		return n;
 	}
 
 	/** The names shown (after the filter) as Excel, e.g. to have the missing ones translated. */
@@ -177,7 +243,7 @@ public class ReportLabelsBean implements Serializable {
 				Row h = sheet.createRow(0);
 				String[] titles = { ReportUi.text("rb.labels.key"), ReportUi.text("rb.labels.owner"),
 						ReportUi.text("rb.labels.autoEn"), ReportUi.text("rb.labels.autoAr"), ReportUi.text("rb.labels.ar"),
-						ReportUi.text("rb.labels.en") };
+						ReportUi.text("rb.labels.en"), ReportUi.text("rb.labels.shown") };
 				for (int i = 0; i < titles.length; i++) {
 					h.createCell(i).setCellValue(titles[i]);
 					sheet.setColumnWidth(i, 30 * 256);
@@ -191,6 +257,8 @@ public class ReportLabelsBean implements Serializable {
 					row.createCell(3).setCellValue(nz(r.getEntry().getAutoAr()));
 					row.createCell(4).setCellValue(nz(r.ar));
 					row.createCell(5).setCellValue(nz(r.en));
+					if (r.isHideable())
+						row.createCell(6).setCellValue(ReportUi.text(r.isShown() ? "rb.labels.yes" : "rb.labels.no"));
 				}
 				wb.write(out);
 			} finally {
@@ -277,6 +345,14 @@ public class ReportLabelsBean implements Serializable {
 
 	public void setMissingOnly(boolean missingOnly) {
 		this.missingOnly = missingOnly;
+	}
+
+	public boolean isHiddenOnly() {
+		return hiddenOnly;
+	}
+
+	public void setHiddenOnly(boolean hiddenOnly) {
+		this.hiddenOnly = hiddenOnly;
 	}
 
 	public void touch() {

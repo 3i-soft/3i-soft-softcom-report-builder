@@ -55,19 +55,35 @@ public class ReportLabelService {
 	 * @return how many labels were changed
 	 */
 	public int save(Map<String, String[]> changes) {
+		return save(changes, java.util.Collections.<String, Boolean>emptyMap());
+	}
+
+	/**
+	 * Saves changed labels (key -&gt; {Arabic, English}) and changed hidden
+	 * flags (key -&gt; hidden) of tables and fields. A key with no label and
+	 * not hidden is removed. Keys only in {@code hidden} keep their labels.
+	 *
+	 * @return how many keys were changed
+	 */
+	public int save(Map<String, String[]> changes, Map<String, Boolean> hidden) {
 		if (!security.canEditLabels())
 			throw new ReportException("rb.error.accessDenied");
 		String user = security.getCurrentUser();
 		Date now = new Date();
 		int changed = 0;
-		for (Map.Entry<String, String[]> c : changes.entrySet()) {
-			String key = c.getKey() == null ? "" : c.getKey().trim();
+		java.util.Set<String> keys = new java.util.LinkedHashSet<>(changes.keySet());
+		keys.addAll(hidden.keySet());
+		for (String rawKey : keys) {
+			String key = rawKey == null ? "" : rawKey.trim();
 			if (key.isEmpty() || key.length() > MAX_LENGTH)
 				continue;
-			String ar = clean(c.getValue().length > 0 ? c.getValue()[0] : null);
-			String en = clean(c.getValue().length > 1 ? c.getValue()[1] : null);
 			ReportLabel l = em().find(ReportLabel.class, key);
-			if (ar == null && en == null) {
+			String[] labels = changes.get(rawKey);
+			String ar = labels != null ? clean(labels.length > 0 ? labels[0] : null) : l == null ? null : l.getLabelAr();
+			String en = labels != null ? clean(labels.length > 1 ? labels[1] : null) : l == null ? null : l.getLabelEn();
+			Boolean h = hidden.get(rawKey);
+			boolean hide = h != null ? h : l != null && l.isHidden();
+			if (ar == null && en == null && !hide) {
 				if (l != null) {
 					em().remove(l);
 					changed++;
@@ -80,6 +96,7 @@ public class ReportLabelService {
 			}
 			l.setLabelAr(ar);
 			l.setLabelEn(en);
+			l.setHidden(hide);
 			l.setUpdatedBy(user);
 			l.setUpdatedDate(now);
 			changed++;

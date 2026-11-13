@@ -53,11 +53,15 @@ PostgreSQL 16 (`mvn test -Drb.test.pg.url=jdbc:postgresql://localhost:5432/rbtes
    <class>org.softcom.reportbuilder.model.ReportLabel</class>
    ```
 
-4. **Tables.** Copy the scripts of `src/main/resources/META-INF/softcom-report-builder/sql/` into the app's Flyway
-   folder as its next versions, in order: `postgresql-1.0.0.sql`, then `postgresql-1.1.0.sql` (shared users, folders,
-   `rb_label`), then `postgresql-1.2.0.sql` (tables and fields hidden on the labels page). They are idempotent.
-   Without the 1.2.0 script the saved labels and hidden flags cannot be read: the reports still work, with the
-   automatic names and every table shown (a warning is logged).
+4. **Tables.** Nothing to do: the library creates and updates its own tables (`rb_*`) when the application starts
+   (`ReportSchemaUpdater`), on the application's data source, with the scripts of
+   `src/main/resources/META-INF/softcom-report-builder/sql/` - each run once, in order, recorded in
+   `rb_schema_version`. **Do not copy them into the application's migrations.** They are idempotent, so a database
+   whose tables were made by the application's own migrations (as generalWarehouse did before) is brought up to date
+   as is. PostgreSQL only; the database user must be allowed to create and alter tables. To manage the tables yourself,
+   start the server with `-Dsoftcom.reportbuilder.SCHEMA_UPDATE=false` and run the scripts by hand. A failure is
+   logged (SEVERE) and only the report pages are affected. A new library version that changes its tables adds the
+   next `postgresql-x.y.z.sql` and its version at the end of `ReportSchema.SCRIPTS`.
 
 5. **Data sources.** Nothing to do: every entity is offered automatically (generalWarehouse has no report code at
    all). Keep the library in the WAR's own `WEB-INF/lib` (its caches are per application). Hand-written data sources

@@ -35,6 +35,11 @@ public final class ReportBuilderConfig {
 	public static final String MAX_DATE_RANGE_DAYS = PREFIX + "MAX_DATE_RANGE_DAYS";
 	/** Query timeout of the automatic data sources. Default 30 seconds. */
 	public static final String QUERY_TIMEOUT_SECONDS = PREFIX + "QUERY_TIMEOUT_SECONDS";
+	/**
+	 * true (default): the library creates and updates its own tables (rb_*) when the application starts. Read at
+	 * start-up, before any request: set it as a system property (a web.xml parameter may not be seen yet).
+	 */
+	public static final String SCHEMA_UPDATE = PREFIX + "SCHEMA_UPDATE";
 	/** Report queries that may run at the same time in this application. Default 6. */
 	public static final String MAX_CONCURRENT_QUERIES = PREFIX + "MAX_CONCURRENT_QUERIES";
 

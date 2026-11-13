@@ -1,6 +1,6 @@
 -- softcom-report-builder 1.0.0 - tables in the HOST application's database (PostgreSQL).
--- Copy this script into the application's own Flyway folder as its next version
--- (e.g. generalWarehouse: db/migration/V5_6_4__script.sql). It is idempotent.
+-- Run by the library itself when the application starts (ReportSchemaUpdater, recorded in rb_schema_version):
+-- do NOT copy it into the application's migrations. It is idempotent.
 DO $SCRIPT$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'rb_report_definition_seq' AND relkind = 'S') THEN

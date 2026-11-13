@@ -1,5 +1,6 @@
 -- softcom-report-builder 1.2.0 - changes to the HOST application's database (PostgreSQL), after 1.1.0.
--- Copy this script into the application's own Flyway folder as its next version. It is idempotent.
+-- Run by the library itself when the application starts (ReportSchemaUpdater, recorded in rb_schema_version):
+-- do NOT copy it into the application's migrations. It is idempotent.
 DO $SCRIPT$
 BEGIN
     -- tables and fields hidden on the labels page: not offered in reports

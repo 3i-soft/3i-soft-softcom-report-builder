@@ -101,20 +101,29 @@ public abstract class AbstractReportBean implements Serializable {
 	public void next() {
 		if (result != null && result.isHasMore()) {
 			first += pageSize;
-			execute();
+			showPage();
 		}
 	}
 
 	public void previous() {
 		if (first > 0) {
 			first = Math.max(0, first - pageSize);
-			execute();
+			showPage();
 		}
 	}
 
 	public void onPageSizeChange() {
 		first = 0;
 		if (result != null)
+			showPage();
+	}
+
+	/** A result read whole (a pivot table) is paged from memory; otherwise the page is read from the database. */
+	private void showPage() {
+		ReportResult page = result == null ? null : result.page(first, pageSize);
+		if (page != null)
+			result = page;
+		else
 			execute();
 	}
 
@@ -125,6 +134,9 @@ public abstract class AbstractReportBean implements Serializable {
 	public String getPageInfo() {
 		if (result == null || result.getRows().isEmpty())
 			return "";
+		if (result.isComplete())
+			return ReportUi.text("rb.pageInfoOf", first + 1, first + result.getRows().size(), result.getTotalRows(),
+					result.getDurationMs());
 		return ReportUi.text("rb.pageInfo", first + 1, first + result.getRows().size(), result.getDurationMs());
 	}
 

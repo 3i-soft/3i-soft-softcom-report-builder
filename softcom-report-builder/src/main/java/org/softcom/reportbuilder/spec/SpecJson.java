@@ -77,6 +77,17 @@ public final class SpecJson {
 			}
 			root.add("links", links);
 		}
+		if (spec.getPivot() != null) {
+			PivotSpec p = spec.getPivot();
+			JsonObjectBuilder o = Json.createObjectBuilder();
+			addIfNotNull(o, "field", p.getField());
+			addIfNotNull(o, "value", p.getValue());
+			if (p.getAggregate() != null)
+				o.add("aggregate", p.getAggregate().name());
+			if (p.isRowTotal())
+				o.add("rowTotal", true);
+			root.add("pivot", o);
+		}
 		StringWriter sw = new StringWriter();
 		try (JsonWriter w = Json.createWriter(sw)) {
 			w.writeObject(root.build());
@@ -153,6 +164,13 @@ public final class SpecJson {
 				links.add(link);
 			}
 			spec.setLinks(links);
+			if (root.containsKey("pivot") && !root.isNull("pivot")) {
+				JsonObject p = root.getJsonObject("pivot");
+				PivotSpec pivot = new PivotSpec(string(p, "field"), string(p, "value"),
+						enumValue(Aggregate.class, string(p, "aggregate"), Aggregate.SUM));
+				pivot.setRowTotal(p.getBoolean("rowTotal", false));
+				spec.setPivot(pivot);
+			}
 			return spec;
 		} catch (ClassCastException | NullPointerException e) {
 			throw new ReportException(e, "rb.error.invalidDefinition", "unexpected structure");

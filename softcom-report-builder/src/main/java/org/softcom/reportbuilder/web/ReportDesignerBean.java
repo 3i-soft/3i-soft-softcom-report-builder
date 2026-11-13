@@ -28,6 +28,7 @@ import org.softcom.reportbuilder.spec.DatePart;
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.LinkSpec;
 import org.softcom.reportbuilder.spec.Operator;
+import org.softcom.reportbuilder.spec.PivotSpec;
 import org.softcom.reportbuilder.spec.ReportSpec;
 import org.softcom.reportbuilder.spec.SortSpec;
 import org.softcom.reportbuilder.spi.ReportDataSource;
@@ -70,6 +71,9 @@ public class ReportDesignerBean extends AbstractReportBean {
 	private List<SortSpec> sorts = new ArrayList<>();
 	private boolean totals;
 	private boolean subtotals;
+	/** Shown as a pivot table: the settings are kept while it is switched off. */
+	private boolean pivotOn;
+	private PivotSpec pivot = new PivotSpec();
 	private int ruleSeq;
 
 	@PostConstruct
@@ -141,6 +145,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 			sorts.add(s.copy());
 		totals = spec.isTotals();
 		subtotals = spec.isSubtotals();
+		pivotOn = spec.getPivot() != null;
+		pivot = pivotOn ? spec.getPivot().copy() : new PivotSpec();
 		groups = loadedGroups;
 		topLogic = loadedLogic;
 		ruleSeq = maxSeq;
@@ -178,7 +184,9 @@ public class ReportDesignerBean extends AbstractReportBean {
 			}
 		}
 		spec.setTotals(totals);
-		spec.setSubtotals(subtotals);
+		spec.setSubtotals(subtotals && !pivotOn);
+		if (pivotOn)
+			spec.setPivot(pivot.copy());
 		FilterNode root = FilterNode.group(topLogic);
 		for (GroupEditor g : groups) {
 			FilterNode gn = FilterNode.group(g.getLogic());
@@ -203,6 +211,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 
 	public void onDataSourceChange() {
 		links = new ArrayList<>();
+		pivotOn = false;
+		pivot = new PivotSpec();
 		columns = new ArrayList<>();
 		groups = new ArrayList<>();
 		sorts = new ArrayList<>();
@@ -293,6 +303,10 @@ public class ReportDesignerBean extends AbstractReportBean {
 			for (LinkSpec.Pair p : l.getOn())
 				if (alias.equals(LinkSpec.aliasOf(p.getLeft())))
 					p.setLeft(null);
+		if (alias.equals(LinkSpec.aliasOf(pivot.getField())))
+			pivot.setField(null);
+		if (alias.equals(LinkSpec.aliasOf(pivot.getValue())))
+			pivot.setValue(null);
 	}
 
 	/** Tables a link can use: those the user may report on. */
@@ -333,6 +347,113 @@ public class ReportDesignerBean extends AbstractReportBean {
 
 	public List<LinkSpec> getLinks() {
 		return links;
+	}
+
+	// ------------------------------------------------------------- pivot
+
+	/** Fields whose values can become the columns: those a report can be grouped by. */
+	public List<SelectItem> getPivotFieldItems() {
+		ReportDataSource ds = getDataSource();
+		return ds == null ? new ArrayList<SelectItem>()
+				: fieldItems(ds, false, f -> !f.isViaCollection() && f.isGroupable(), getSpeed());
+	}
+
+	/** Totals of the cells' value (no "none"). */
+	public List<SelectItem> getPivotAggregateItems() {
+		List<SelectItem> items = new ArrayList<>();
+		for (SelectItem i : aggregateItems(new ColumnSpec(pivot.getValue(), Aggregate.NONE)))
+			if (i.getValue() != Aggregate.NONE)
+				items.add(i);
+		return items;
+	}
+
+	/** Another value: keep the total if it still applies, else the first one that does (sum for numbers). */
+	public void onPivotValueChange() {
+		List<SelectItem> items = getPivotAggregateItems();
+		for (SelectItem i : items)
+			if (i.getValue() == pivot.getAggregate())
+				return;
+		Aggregate best = null;
+		for (SelectItem i : items)
+			if (best == null || i.getValue() == Aggregate.SUM)
+				best = (Aggregate) i.getValue();
+		pivot.setAggregate(best);
+	}
+
+	/**
+	 * The checkbox was ticked or unticked: arrange the columns so the report
+	 * keeps meaning the same thing. On: the first column with a total becomes
+	 * the cells' value, and the last plain column (when there are two or more)
+	 * the field whose values become columns - "item, supplier, highest price"
+	 * becomes items x suppliers with the highest price in the cells. Off: both
+	 * come back as columns.
+	 */
+	public void onPivotToggle() {
+		if (pivotOn) {
+			String moved = null;
+			if (pivot.getValue() == null)
+				for (int i = 0; i < columns.size(); i++) {
+					ColumnSpec c = columns.get(i);
+					if (c.getField() != null && c.isAggregated()) {
+						pivot.setValue(c.getField());
+						pivot.setAggregate(c.getAggregate());
+						moved = fieldLabel(c.getField());
+						removeColumn(i);
+						break;
+					}
+				}
+			String across = null;
+			if (pivot.getField() == null) {
+				int last = -1;
+				int plain = 0;
+				for (int i = 0; i < columns.size(); i++)
+					if (columns.get(i).getField() != null && !columns.get(i).isAggregated()) {
+						plain++;
+						last = i;
+					}
+				ReportField f = last < 0 ? null : field(columns.get(last).getField());
+				if (plain >= 2 && f != null && f.isGroupable() && !f.isViaCollection()) {
+					pivot.setField(columns.get(last).getField());
+					across = fieldLabel(pivot.getField());
+					removeColumn(last);
+				}
+			}
+			if (pivot.getValue() == null) {
+				// nothing to put in the cells yet: count the rows, the one value every table has
+				pivot.setValue(ReportDataSource.ROW_COUNT_FIELD);
+				pivot.setAggregate(Aggregate.COUNT);
+			}
+			pivot.setRowTotal(true);
+			totals = true;
+			if (across != null || moved != null)
+				ReportUi.info("rb.pivot.arranged", across == null ? "-" : across,
+						moved == null ? ReportUi.text("rb.rowCount") : moved);
+		} else {
+			if (pivot.getField() != null)
+				columns.add(new ColumnSpec(pivot.getField(), Aggregate.NONE));
+			if (pivot.getValue() != null)
+				columns.add(new ColumnSpec(pivot.getValue(),
+						ReportDataSource.ROW_COUNT_FIELD.equals(pivot.getValue()) ? Aggregate.COUNT : pivot.getAggregate()));
+			pivot = new PivotSpec();
+		}
+		result = null;
+	}
+
+	/** A total column / row means something for sums, counts, minimums and maximums. */
+	public boolean isPivotTotalsPossible() {
+		return PivotSpec.hasTotals(pivot.getAggregate());
+	}
+
+	public boolean isPivotOn() {
+		return pivotOn;
+	}
+
+	public void setPivotOn(boolean pivotOn) {
+		this.pivotOn = pivotOn;
+	}
+
+	public PivotSpec getPivot() {
+		return pivot;
 	}
 
 	public void addColumn() {
@@ -536,6 +657,8 @@ public class ReportDesignerBean extends AbstractReportBean {
 		sorts = new ArrayList<>();
 		totals = false;
 		subtotals = false;
+		pivotOn = false;
+		pivot = new PivotSpec();
 		topLogic = FilterNode.Logic.AND;
 		result = null;
 		ruleSeq = 0;
@@ -613,7 +736,7 @@ public class ReportDesignerBean extends AbstractReportBean {
 		for (ColumnSpec c : columns)
 			if (!c.isAggregated() && c.getField() != null && !c.getField().isEmpty())
 				grouping++;
-		return isGrouped() && grouping >= 2;
+		return !pivotOn && isGrouped() && grouping >= 2;
 	}
 
 	public boolean isTotals() {

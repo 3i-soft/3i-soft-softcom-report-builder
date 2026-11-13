@@ -27,6 +27,8 @@ public class ReportSpec implements Serializable {
 	private boolean subtotals;
 	/** Tables linked by equal columns (see {@link LinkSpec}), in order: a link may use the fields of earlier ones. */
 	private List<LinkSpec> links = new ArrayList<>();
+	/** Shown as a pivot table (see {@link PivotSpec}); null = a plain list or grouped report. */
+	private PivotSpec pivot;
 
 	public ReportSpec copy() {
 		ReportSpec s = new ReportSpec();
@@ -41,6 +43,7 @@ public class ReportSpec implements Serializable {
 		s.subtotals = subtotals;
 		for (LinkSpec l : links)
 			s.links.add(l.copy());
+		s.pivot = pivot == null ? null : pivot.copy();
 		return s;
 	}
 
@@ -57,7 +60,7 @@ public class ReportSpec implements Serializable {
 	 * down; otherwise -1.
 	 */
 	public int subtotalColumn() {
-		if (!subtotals || !isGrouped())
+		if (!subtotals || !isGrouped() || pivot != null)
 			return -1;
 		int first = -1;
 		for (int i = 0; i < columns.size(); i++)
@@ -160,5 +163,13 @@ public class ReportSpec implements Serializable {
 				if (alias.equals(l.getAlias()))
 					return l;
 		return null;
+	}
+
+	public PivotSpec getPivot() {
+		return pivot;
+	}
+
+	public void setPivot(PivotSpec pivot) {
+		this.pivot = pivot;
 	}
 }

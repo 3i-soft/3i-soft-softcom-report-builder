@@ -153,4 +153,75 @@ public class DesignerLogicTest {
 		assertEquals(org.softcom.reportbuilder.engine.SpecValidator.MAX_LINKS, d.getLinks().size());
 		assertFalse(d.isCanAddLink());
 	}
+
+	/** A designer on a small hand-written data source (no container). */
+	private static ReportDesignerBean designerOn(final org.softcom.reportbuilder.spi.ReportDataSource ds) {
+		ReportDesignerBean d = new ReportDesignerBean();
+		d.catalog = new org.softcom.reportbuilder.service.ReportCatalog() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public org.softcom.reportbuilder.spi.ReportDataSource get(String key) {
+				return ds.getKey().equals(key) ? ds : null;
+			}
+		};
+		d.setDataSourceKey(ds.getKey());
+		return d;
+	}
+
+	private static org.softcom.reportbuilder.spi.ReportDataSource prices() {
+		org.softcom.reportbuilder.spi.ReportDataSource ds = new org.softcom.reportbuilder.spi.ReportDataSource("prices",
+				Object.class);
+		ds.join("item", javax.persistence.criteria.JoinType.INNER).join("supplier", javax.persistence.criteria.JoinType.INNER);
+		ds.add(org.softcom.reportbuilder.spi.ReportField.of("item.name", FieldType.STRING, "الصنف", "Item"));
+		ds.add(org.softcom.reportbuilder.spi.ReportField.of("supplier.name", FieldType.STRING, "المورد", "Supplier"));
+		ds.add(org.softcom.reportbuilder.spi.ReportField.of("price", FieldType.DECIMAL, "السعر", "Price"));
+		return ds;
+	}
+
+	@Test
+	public void tickingPivotTurnsTheColumnsIntoAPivot() {
+		ReportDesignerBean d = designerOn(prices());
+		d.getColumns().add(new ColumnSpec("item.name", Aggregate.NONE));
+		d.getColumns().add(new ColumnSpec("supplier.name", Aggregate.NONE));
+		d.getColumns().add(new ColumnSpec("price", Aggregate.MAX));
+		d.setPivotOn(true);
+		d.onPivotToggle();
+		assertEquals("item, supplier, highest price -> items x suppliers", 1, d.getColumns().size());
+		assertEquals("item.name", d.getColumns().get(0).getField());
+		assertEquals("supplier.name", d.getPivot().getField());
+		assertEquals("price", d.getPivot().getValue());
+		assertEquals(Aggregate.MAX, d.getPivot().getAggregate());
+		assertTrue("totals on by default", d.getPivot().isRowTotal() && d.isTotals());
+		ReportSpec spec = d.buildSpec();
+		assertEquals("supplier.name", spec.getPivot().getField());
+		org.softcom.reportbuilder.engine.SpecValidator.validate(spec, prices(), true);
+
+		d.setPivotOn(false);
+		d.onPivotToggle();
+		assertEquals("unticking gives the columns back", Arrays.asList("item.name", "supplier.name", "price"),
+				Arrays.asList(d.getColumns().get(0).getField(), d.getColumns().get(1).getField(), d.getColumns().get(2).getField()));
+		assertEquals(Aggregate.MAX, d.getColumns().get(2).getAggregate());
+		assertNull(d.buildSpec().getPivot());
+	}
+
+	@Test
+	public void aPivotWithoutATotalColumnCountsRows() {
+		ReportDesignerBean d = designerOn(prices());
+		d.getColumns().add(new ColumnSpec("item.name", Aggregate.NONE));
+		d.setPivotOn(true);
+		d.onPivotToggle();
+		assertNull("one plain column stays the rows: the user chooses the columns' field", d.getPivot().getField());
+		assertEquals("*", d.getPivot().getValue());
+		assertEquals(Aggregate.COUNT, d.getPivot().getAggregate());
+		// choosing a value keeps a total it supports, else the sum for numbers
+		d.getPivot().setValue("price");
+		d.onPivotValueChange();
+		assertEquals(Aggregate.COUNT, d.getPivot().getAggregate());
+		d.getPivot().setAggregate(Aggregate.AVG);
+		assertFalse(d.isPivotTotalsPossible());
+		d.getPivot().setValue("supplier.name");
+		d.onPivotValueChange();
+		assertEquals("a text has no average: the first total it has", Aggregate.COUNT, d.getPivot().getAggregate());
+	}
 }

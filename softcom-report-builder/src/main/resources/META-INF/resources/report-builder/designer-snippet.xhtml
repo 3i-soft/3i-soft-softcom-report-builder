@@ -177,7 +177,41 @@
 						<p:selectBooleanCheckbox value="#{rbDesigner.totals}" itemLabel="#{rbbundle['rb.option.totals']}" />
 						<p:selectBooleanCheckbox value="#{rbDesigner.subtotals}" itemLabel="#{rbbundle['rb.option.subtotals']}"
 							rendered="#{rbDesigner.subtotalsPossible}" />
+						<p:selectBooleanCheckbox value="#{rbDesigner.pivotOn}" itemLabel="#{rbbundle['rb.pivot.on']}">
+							<p:ajax listener="#{rbDesigner.onPivotToggle}" process="@form" update="@(.rb-columns) @(.rb-sort) @(.rb-messages) @(.rb-result)" />
+						</p:selectBooleanCheckbox>
 					</div>
+					<!-- pivot table: the values of one field become columns; the columns above are the rows -->
+					<h:panelGroup layout="block" styleClass="rb-group rb-pivot" rendered="#{rbDesigner.pivotOn}">
+						<div class="rb-group-head">
+							<i class="fa fa-th" />
+							<span>#{rbbundle['rb.pivot.hint']}</span>
+						</div>
+						<div class="rb-row">
+							<h:outputLabel value="#{rbbundle['rb.pivot.field']}" styleClass="rb-label" />
+							<p:selectOneMenu value="#{rbDesigner.pivot.field}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg">
+								<f:selectItem itemLabel="#{rbbundle['rb.chooseField']}" itemValue="#{null}" noSelectionOption="true" />
+								<f:selectItems value="#{rbDesigner.pivotFieldItems}" />
+							</p:selectOneMenu>
+						</div>
+						<div class="rb-row">
+							<h:outputLabel value="#{rbbundle['rb.pivot.value']}" styleClass="rb-label" />
+							<p:selectOneMenu value="#{rbDesigner.pivot.value}" filter="true" filterMatchMode="contains" autoWidth="false" styleClass="rb-w-lg">
+								<f:selectItem itemLabel="#{rbbundle['rb.chooseField']}" itemValue="#{null}" noSelectionOption="true" />
+								<f:selectItem itemLabel="#{rbbundle['rb.rowCount']}" itemValue="*" />
+								<f:selectItems value="#{rbDesigner.columnFieldItems}" />
+								<p:ajax listener="#{rbDesigner.onPivotValueChange}" process="@form" update="@(.rb-columns) @(.rb-messages)" />
+							</p:selectOneMenu>
+							<p:selectOneMenu value="#{rbDesigner.pivot.aggregate}" title="#{rbbundle['rb.aggregate']}" autoWidth="false" styleClass="rb-w-md"
+								rendered="#{not empty rbDesigner.pivotAggregateItems}">
+								<f:selectItems value="#{rbDesigner.pivotAggregateItems}" />
+								<p:ajax process="@form" update="@(.rb-columns) @(.rb-messages)" />
+							</p:selectOneMenu>
+						</div>
+						<h:panelGroup layout="block" styleClass="rb-options" rendered="#{rbDesigner.pivotTotalsPossible}">
+							<p:selectBooleanCheckbox value="#{rbDesigner.pivot.rowTotal}" itemLabel="#{rbbundle['rb.pivot.rowTotal']}" />
+						</h:panelGroup>
+					</h:panelGroup>
 				</h:panelGroup>
 
 				<!-- 2. conditions -->

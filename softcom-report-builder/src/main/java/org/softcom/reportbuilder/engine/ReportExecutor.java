@@ -106,6 +106,14 @@ public class ReportExecutor {
 		int size = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
 		int start = Math.max(0, Math.min(first, MAX_FIRST_ROW));
 		long t0 = System.currentTimeMillis();
+		if (spec.getPivot() != null) {
+			// read whole (one grouped query), then paged in memory
+			PivotTable t = pivot(em, ds, spec, run);
+			ResultRow totalRow = t.totals != null ? new ResultRow(t.totals, ResultRow.Kind.TOTAL, 0) : null;
+			// the names of every row at once: the next pages are cut from memory (ReportResult#page)
+			return ReportResult.complete(t.columns, t.rows, totalRow, names(em, ds, spec, t.rows),
+					System.currentTimeMillis() - t0, start, size);
+		}
 		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, spec, run);
 		List<Object[]> fetched = fetch(em, ds, built, start, size + 1, false);
 		boolean hasMore = fetched.size() > size;
@@ -159,6 +167,31 @@ public class ReportExecutor {
 			}
 		}
 		return out;
+	}
+
+	/** A pivot report, read whole: one grouped query, then the names of the column values' ids. */
+	private PivotTable pivot(EntityManager em, ReportDataSource ds, ReportSpec spec, ReportRunContext run) {
+		ReportSpec grouped = PivotTable.groupedSpec(spec);
+		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, grouped, run);
+		List<Object[]> tuples = fetch(em, ds, built, 0, PivotTable.MAX_CELLS + 1, false);
+		if (tuples.size() > PivotTable.MAX_CELLS)
+			throw new ReportException("rb.error.pivotTooLarge", PivotTable.MAX_CELLS);
+		// the columns of a supplier id are named after the supplier
+		int k = spec.getColumns().size();
+		ReportField f = ds.getField(spec.getPivot().getField());
+		Map<String, String> headerNames = null;
+		if (f.hasLookup()) {
+			Set<Object> ids = new LinkedHashSet<>();
+			for (Object[] t : tuples)
+				if (t[k] != null)
+					ids.add(t[k]);
+			try {
+				headerNames = ids.isEmpty() ? null : LookupQueries.names(em, f.getLookup(), ids, ds.getQueryTimeoutSeconds());
+			} catch (RuntimeException e) {
+				LOG.log(Level.WARNING, "Report builder: names of " + f.getPath() + " are not available", e);
+			}
+		}
+		return PivotTable.of(built.getColumns(), tuples, spec, ds, headerNames);
 	}
 
 	/** The subtotals of the values of column {@code by} in {@code rows}, as full-width rows. */
@@ -226,6 +259,18 @@ public class ReportExecutor {
 		SpecValidator.validate(spec, ds, true);
 		SpeedRules.check(spec, ds, speed, maxDateRangeDays());
 		int limit = Math.max(1, Math.min(maxRows <= 0 ? ds.getMaxExportRows() : maxRows, ds.getMaxExportRows()));
+		if (spec.getPivot() != null) {
+			PivotTable t = pivot(em, ds, spec, run);
+			boolean cut = t.rows.size() > limit;
+			List<Object[]> rows = cut ? t.rows.subList(0, limit) : t.rows;
+			sink.begin(t.columns);
+			sink.names(names(em, ds, spec, rows));
+			sink.rows(rows);
+			if (t.totals != null && !cut)
+				sink.total(t.totals, 0);
+			sink.end(cut, limit);
+			return rows.size();
+		}
 		ReportQueryBuilder.Built built = ReportQueryBuilder.build(em, ds, spec, run);
 		sink.begin(built.getColumns());
 		int by = spec.subtotalColumn();

@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.softcom.reportbuilder.spec.ColumnSpec;
 import org.softcom.reportbuilder.spec.LinkSpec;
+import org.softcom.reportbuilder.spec.PivotSpec;
 import org.softcom.reportbuilder.spec.FilterNode;
 import org.softcom.reportbuilder.spec.Operator;
 import org.softcom.reportbuilder.spec.ReportSpec;
@@ -76,8 +77,44 @@ public final class SpecValidator {
 		for (SortSpec s : spec.getSort())
 			if (s.getColumn() < 0 || s.getColumn() >= columns.size())
 				throw new ReportException("rb.error.invalidSort", s.getColumn());
+		if (spec.getPivot() != null)
+			validatePivot(spec, ds);
 		if (requireValues)
 			checkRequiredFilter(spec, ds);
+	}
+
+	/**
+	 * A pivot table: the report's columns are the rows' keys (plain fields, no
+	 * totals nor row count), the column field can be grouped, and the cells'
+	 * value supports its aggregate.
+	 */
+	static void validatePivot(ReportSpec spec, ReportDataSource ds) {
+		PivotSpec p = spec.getPivot();
+		if (SpecValidator.isBlank(p.getField()))
+			throw new ReportException("rb.error.pivotField");
+		if (SpecValidator.isBlank(p.getValue()))
+			throw new ReportException("rb.error.pivotValue");
+		for (ColumnSpec c : spec.getColumns())
+			if (c.isAggregated() || ReportDataSource.ROW_COUNT_FIELD.equals(c.getField()))
+				throw new ReportException("rb.error.pivotRowColumns");
+			else if (!field(ds, c.getField()).isGroupable())
+				throw new ReportException("rb.error.notGroupable", c.getField());
+		ReportField column = field(ds, p.getField());
+		if (column.isViaCollection() || !column.isGroupable())
+			throw new ReportException("rb.error.notGroupable", column.getPath());
+		Aggregate agg = p.getAggregate();
+		if (agg == null || agg == Aggregate.NONE)
+			throw new ReportException("rb.error.pivotValue");
+		if (ReportDataSource.ROW_COUNT_FIELD.equals(p.getValue())) {
+			if (agg != Aggregate.COUNT)
+				throw new ReportException("rb.error.rowCountNeedsCount");
+			return;
+		}
+		ReportField value = field(ds, p.getValue());
+		if (value.isViaCollection())
+			throw new ReportException("rb.error.conditionOnly", value.getPath());
+		if (!agg.supports(value.getType(), value.isAggregatable()))
+			throw new ReportException("rb.error.aggregateNotAllowed", agg, value.getPath());
 	}
 
 	/**

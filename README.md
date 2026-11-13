@@ -176,6 +176,9 @@ A report may link other tables by equal columns (see *Linked tables*); their fie
                {"field": "l1:totalAvailableQuantity", "aggregate": "MAX"} ]
 ```
 
+A pivot table adds `"pivot": {"field": "supplier.id", "value": "price", "aggregate": "MAX", "rowTotal": true}`
+(the report's columns are then the rows, without totals).
+
 When any column has a total, the other columns become the GROUP BY. Conditions marked `askAtRun` are asked for each
 time the report is run. DATE fields use whole-day semantics (`BETWEEN d1 AND d2` includes all of `d2`), so they also
 work on timestamp columns and still use an index. DATETIME fields do the same when the values are plain days
@@ -299,6 +302,15 @@ generalWarehouse's `GwReportRowFilter` limits every report to the user's warehou
   name first; names are saved in `rb_label` and used at once (the data sources are rebuilt, no restart). A field of a
   shared base class (`MainEntity.creationDate`) is named once for all its tables. The list can be exported to Excel,
   e.g. to have the missing names translated.
+- **Pivot tables** ("Show as a pivot table", under the columns): the values of a chosen field become columns (e.g. one
+  column per supplier), each cell holds the total of a chosen value (e.g. the highest price), and the report's columns
+  become the rows (e.g. the items). Optional total column per row and total row - for sums, counts, minimums and
+  maximums (not averages). Only rows with data appear. Ticking it arranges an existing report by itself ("item,
+  supplier, highest price" becomes items x suppliers) and unticking it gives the columns back. Ids are shown by name
+  in the column titles. Works with linked tables, conditions, sorting by the row columns and Excel. It is one grouped
+  query, read whole and then paged in memory (the next pages ask nothing of the database): at most 100 columns,
+  100,000 cells with data and 1,000,000 cells in all, otherwise the user is asked to add conditions. Measured on 2.8
+  million invoice lines: warehouses x invoice types 0.3 s; 2,000 items x 40 warehouses through a linked table 1 s.
 - **Hiding tables and fields** (labels page, "Shown in reports"): a hidden table is not offered as a data source (nor
   as a linked table) and is not reached through other tables' relations; a hidden field is not offered anywhere -
   columns, conditions, linked-table pairs - and hiding a relation (`InvoiceLine.item`) hides everything behind it.

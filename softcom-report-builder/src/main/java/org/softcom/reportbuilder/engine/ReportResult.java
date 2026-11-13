@@ -24,6 +24,9 @@ public class ReportResult implements Serializable {
 	private final ResultRow totals;
 	/** Column index -&gt; id key -&gt; name, for columns of ids shown by name (see ReportLookup). */
 	private Map<Integer, Map<String, String>> names = Collections.emptyMap();
+	/** Every row of a result read whole (a pivot table), paged in memory; null = only this page was read. */
+	private List<Object[]> allRows;
+	private ResultRow allTotals;
 
 	public ReportResult(List<ResultColumn> columns, List<Object[]> rows, int first, boolean hasMore, long durationMs) {
 		this(columns, rows, null, null, first, hasMore, durationMs);
@@ -87,5 +90,42 @@ public class ReportResult implements Serializable {
 
 	public long getDurationMs() {
 		return durationMs;
+	}
+
+	/**
+	 * A result read whole (a pivot table): its pages are cut from memory by
+	 * {@link #page(int, int)}, without asking the database again.
+	 */
+	static ReportResult complete(List<ResultColumn> columns, List<Object[]> allRows, ResultRow totals,
+			Map<Integer, Map<String, String>> names, long durationMs, int first, int pageSize) {
+		ReportResult whole = new ReportResult(columns, Collections.<Object[]>emptyList(), 0, false, durationMs);
+		whole.allRows = allRows;
+		whole.allTotals = totals;
+		whole.setNames(names);
+		return whole.page(first, pageSize);
+	}
+
+	/** Whether every row is held (see {@link #page(int, int)}). */
+	public boolean isComplete() {
+		return allRows != null;
+	}
+
+	/** Another page of a complete result, from memory; null when the result was not read whole. */
+	public ReportResult page(int first, int pageSize) {
+		if (allRows == null)
+			return null;
+		int from = Math.max(0, Math.min(first, allRows.size()));
+		int to = Math.min(allRows.size(), from + Math.max(1, pageSize));
+		ReportResult p = new ReportResult(columns, new ArrayList<>(allRows.subList(from, to)), null,
+				from == 0 ? allTotals : null, from, to < allRows.size(), durationMs);
+		p.allRows = allRows;
+		p.allTotals = allTotals;
+		p.names = names;
+		return p;
+	}
+
+	/** The number of rows of a complete result, else -1. */
+	public int getTotalRows() {
+		return allRows == null ? -1 : allRows.size();
 	}
 }
